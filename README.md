@@ -25,6 +25,7 @@ Will touch on this more as I code
 * Temporal Difference Learning + Dynamic Programming 
 
 ## Technologies
+Sapper.js, tailwind.css
 
 ## How to run
 
