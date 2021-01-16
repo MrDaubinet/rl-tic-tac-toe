@@ -33,6 +33,7 @@
     </svg>
   {:else}
     <div 
-      class="w-8 h-8 sm:w-20 sm:h-20"></div>
+      class="w-8 h-8 sm:w-20 sm:h-20">
+    </div>
   {/if}
 </div>

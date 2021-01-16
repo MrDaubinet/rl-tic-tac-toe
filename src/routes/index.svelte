@@ -64,6 +64,7 @@
 		setTimeout(function(){ 
 			game.reset(); 
 			states=game.getStates() 
+			turn = game.getTurn()
 		}, 1500);
 	}
 </script>

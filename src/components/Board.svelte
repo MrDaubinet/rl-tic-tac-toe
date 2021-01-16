@@ -3,6 +3,7 @@
   import Marker from "../components/Marker.svelte"
   // Data prop
   export let states = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+  // Function prop
   export let selectMarker
 </script>
 

@@ -1,23 +1,29 @@
+import path from 'path';
 import resolve from '@rollup/plugin-node-resolve';
 import replace from '@rollup/plugin-replace';
 import commonjs from '@rollup/plugin-commonjs';
 import svelte from 'rollup-plugin-svelte';
 import babel from '@rollup/plugin-babel';
-import postcss from "rollup-plugin-postcss";
 import { terser } from 'rollup-plugin-terser';
 import sveltePreprocess from "svelte-preprocess";
+import typescript from '@rollup/plugin-typescript';
 import config from 'sapper/config/rollup.js';
 import pkg from './package.json';
+import url from '@rollup/plugin-url';
 
 const mode = process.env.NODE_ENV;
 const dev = mode === 'development';
 const legacy = !!process.env.SAPPER_LEGACY_BUILD;
 
-const onwarn = (warning, onwarn) => (warning.code === 'CIRCULAR_DEPENDENCY' && /[/\\]@sapper[/\\]/.test(warning.message)) || onwarn(warning);
+const onwarn = (warning, onwarn) =>
+	(warning.code === 'MISSING_EXPORT' && /'preload'/.test(warning.message)) ||
+	(warning.code === 'CIRCULAR_DEPENDENCY' && /[/\\]@sapper[/\\]/.test(warning.message)) ||
+	(warning.code === 'THIS_IS_UNDEFINED') ||
+	onwarn(warning);
 
 export default {
   client: {
-    input: config.client.input(),
+    input: config.client.input().replace(/\.js$/, '.ts'),
     output: config.client.output(),
     preserveEntrySignatures: false,
     plugins: [
@@ -28,13 +34,18 @@ export default {
       }),
       // Step 2 -> Compile Svelte
       svelte({
-        dev,
-        hydratable: true,
-        emitCss: true,
         preprocess: sveltePreprocess(),
+				compilerOptions: {
+          dev,
+					hydratable: true
+				},
+        emitCss: true,
       }),
-      // Step 3 -> Checks for css imports, postprocess and extract them (for referencing)
-      // postcss({ extract: "bundle.css" }),
+      // Step 3 -> imports files as data-URIs or ES Modules.
+      url({
+				sourceDir: path.resolve(__dirname, 'src/node_modules/images'),
+				publicPath: '/client/'
+			}),
       // Step 4 -> Import external dependancies from node moduels
       resolve({
         browser: true,
@@ -42,6 +53,7 @@ export default {
       }),
       // Step 5 -> Make all require imports ES6 compatible
       commonjs(),
+			typescript({ sourceMap: dev }),
       // If legacy flag
       legacy &&
       // Step 7 -> Make Everything backwacks js compatible	
@@ -72,7 +84,7 @@ export default {
   },
 
   server: {
-    input: config.server.input(),
+    input: { server: config.server.input().server.replace(/\.js$/, ".ts") },
     output: config.server.output(),
     plugins: [
       replace({
@@ -80,15 +92,18 @@ export default {
         'process.env.NODE_ENV': JSON.stringify(mode)
       }),
       svelte({
-        generate: 'ssr',
-        dev,
         preprocess: sveltePreprocess(),
+        compilerOptions: {
+          generate: 'ssr',
+          dev,
+        }
       }),
       // postcss({ extract: "bundle.css" }),
       resolve({
         dedupe: ['svelte']
       }),
-      commonjs()
+      commonjs(),
+			typescript({ sourceMap: dev })
     ],
     external: Object.keys(pkg.dependencies).concat(
       require('module').builtinModules || Object.keys(process.binding('natives'))
@@ -99,7 +114,7 @@ export default {
   },
 
   serviceworker: {
-    input: config.serviceworker.input(),
+    input: config.serviceworker.input().replace(/\.js$/, '.ts'),
     output: config.serviceworker.output(),
     plugins: [
       resolve(),
@@ -108,6 +123,7 @@ export default {
         'process.env.NODE_ENV': JSON.stringify(mode)
       }),
       commonjs(),
+			typescript({ sourceMap: dev }),
       !dev && terser()
     ],
 
