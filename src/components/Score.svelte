@@ -4,8 +4,8 @@
   export let agent_play = false
 </script>
 
-<div class="h-full rounded min-w-md">
-  <div class="flex justify-between text-2xl text-white ">
+<div class="min-w-md">
+  <div class="flex justify-between text-2xl">
     <div>
       {score[0]} 
       <span class="ml-2">

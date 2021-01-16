@@ -27,6 +27,11 @@ class Game {
     this.score = [0, 0, 0]
   }
 
+  /* update the game  */
+  setState(state){
+    this.states = this.states
+  }
+
   /* Returns the current game state */
   getStates(){
     return this.states
@@ -63,10 +68,6 @@ class Game {
       if(this.checkWin()){
         // set winner status
         this.winner = Number(this.turn)
-        // if(this.turn == 1)
-        //   this.winner
-        // else
-        //   this.turn = 1
         this.updateScore()
         return 'win'
       }

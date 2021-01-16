@@ -2,7 +2,7 @@
   "bundler": "rollup",
   "shimport": "2.0.4",
   "assets": {
-    "main": "client.f0db2772.js"
+    "main": "client.8f6a6cee.js"
   },
   "css": {
     "main": [
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "index.svelte": [
-      "index.04ad2c92.js",
+      "index.021662d1.js",
       "inject_styles.5607aec6.js"
     ]
   }

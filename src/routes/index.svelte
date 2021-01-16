@@ -3,39 +3,48 @@
 	import Board from "../components/Board.svelte"
 	import Score from "../components/Score.svelte"
 	import Turn from "../components/Turn.svelte"
+	import History from "../components/History.svelte"
 	import Notification from "../components/Notification.svelte"
 	// js class
 	import { game } from "../game.js"
+	// store
+	import { history, addState, resetState } from "../stores/History.ts"
+
+	// Display states
+	let showHistory = true
 
 	// game states
-	let states = game.getStates()
-	let turn = game.getTurn()
+	addState(game.getStates(), game.getTurn())
 	let score = game.getScore()
 	let agent_play = false
+	let outcome = null
 
 	// notification states
 	let notification 
 	let show_notificaiton = false
+	
+	// Reactive Statments
+	$: state = $history[$history.length - 1].state
+	$: turn = $history[$history.length - 1].turn
+
+	$:console.log($history)
+	$:console.log(state)
+	
 
 	/* Event triggered by selecting a move */
   function selectMarker(index) {
-		let outcome = game.updateState(index)
-		turn = game.getTurn()
+		outcome = game.updateState(index)
+		addState(game.getStates(), game.getTurn())
 		score = game.getScore()
 		if(outcome == 'win') {
-			let winner = game.getWinner()
-			showNotification(winnerInfo(winner))
-			states = game.getStates()
+			showNotification(winnerInfo(game.getWinner()))
 			reset()
 		} else if(outcome == 'tie') {
 			showNotification('Tie')
-			states = game.getStates()
 			reset()
-		} else if(outcome == 'valid') {
-			states = game.getStates()
-		} else {
+		} else if(outcome == 'invalid') {
 			showNotification('Impossible Move')
-		}
+		} 
   }
 	
 	/* display given text as a notification for 2 seconds */
@@ -59,51 +68,70 @@
 	}
 
 	/* Reset the game state */
-	function reset(){
+	function reset(timeout=1500){
 		clearTimeout()
 		setTimeout(function(){ 
 			game.reset(); 
-			states=game.getStates() 
-			turn = game.getTurn()
-		}, 1500);
+			resetState();
+			addState(game.getStates(), game.getTurn())
+		}, timeout);
 	}
 </script>
 
-<div 
-	class="flex justify-center h-screen bg-black sm:items-center" 
-	style="font-family: 'Bangers', cursive;">
-	<div class="min-w-md"> 
-		<!-- notification -->
-		{#if show_notificaiton}
-			<Notification>{notification}</Notification>
+<div class="h-screen">
+	<!-- notification -->
+	{#if show_notificaiton}
+		<Notification>{notification}</Notification>
+	{/if}
+	<div 
+		class="place-content-center grid mt-20 
+			{showHistory ? 'grid-rows-2 grid-cols-none lg:grid-cols-2 lg:grid-rows-none' : 'grid-rows-none grid-cols-none' }
+		">
+		<div class="px-10 min-w-lg"> 
+			<!-- title -->
+			<h1 class="pt-10 text-6xl text-center sm:pt-0">Tic-Tac-Toe</h1>
+			<div class="py-10">
+				<Turn 
+					{turn}
+					{agent_play}
+				/>
+			</div>
+			<Board 
+				state={state}
+				{selectMarker}
+			/>
+			<!-- score -->
+			<div class="py-10">
+				<Score 
+					{score}
+					{agent_play}
+				/>
+			</div>
+			<div class="flex justify-center py-5">
+				<span class="inline-flex mr-5 rounded-md shadow-sm">
+					<button on:click={()=>reset(0)} class="text-4xl cursor-pointer focus:outline-none hover:text-gray-300">
+						Reset
+					</button>
+				</span>
+				<span class="inline-flex rounded-md shadow-sm">
+					<button on:click={()=>showHistory = !showHistory} class="text-4xl cursor-pointer focus:outline-none hover:text-gray-300">
+						{#if showHistory}
+							Hide History
+						{:else}
+							Show History
+						{/if}
+					</button>
+				</span>
+			</div>
+		</div>
+		{#if showHistory}
+			<div class="px-10 min-w-lg">
+				<h1 class="pt-10 text-6xl text-center sm:pt-0">History</h1>
+				<div class="py-10">
+					<History /> 
+				</div>
+			</div>
 		{/if}
-		<!-- title -->
-		<h1 class="pt-10 text-6xl text-center text-white sm:pt-0">Tic-Tac-Toe</h1>
-		<!-- turn -->
-		<div class="py-10">
-			<Turn 
-				{turn}
-				{agent_play}
-			/>
-		</div>
-		<Board 
-			states={states}
-			{selectMarker}
-		/>
-		<!-- score -->
-		<div class="py-10">
-			<Score 
-				{score}
-				{agent_play}
-			/>
-		</div>
-		<!-- reset -->
-		<div class="flex justify-center pt-5">
-			<span class="inline-flex rounded-md shadow-sm">
-				<button on:click={()=>reset()} class="text-4xl text-white cursor-pointer focus:outline-none hover:text-gray-300">
-					Reset
-				</button>
-			</span>
-		</div>
 	</div>
 </div>
+
