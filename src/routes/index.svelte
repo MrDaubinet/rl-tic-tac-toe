@@ -11,10 +11,10 @@
 	// js class
 	import { game } from "../game.js"
 	// store
-	import history from "../stores/History.ts"
+	import history from "../stores/history.ts"
 
 	// Display states
-	let showHistory = true
+	let showHistory = false
 	
 	// game states
 	let score = game.getScore()
@@ -26,9 +26,6 @@
 	// notification states
 	let notification 
 	let show_notificaiton = false
-	
-	// Reactive statements
-	// $:console.log($history.length)
 
 	// life Cycle events
 	onMount(async () => {

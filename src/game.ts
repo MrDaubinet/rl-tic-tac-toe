@@ -90,7 +90,7 @@ class Game {
 
   /* Add one to the current player */
   updateScore(){
-    this.score[Number(this.turn)] += 1
+    this.score[Number(!this.turn)] += 1
   }
 
   /* Set the game type to player vs Agent */

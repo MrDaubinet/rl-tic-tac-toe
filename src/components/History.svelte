@@ -1,6 +1,6 @@
 <script>
 	// store
-  import history from "../stores/History.ts"
+  import history from "../stores/history.ts"
   // store information
   import { game } from "../game.js"
 
