@@ -1,6 +1,6 @@
 <script>
   // Data props
-  export let turn = 0
+  export let turn 
   export let agent_play = false
 </script>
 

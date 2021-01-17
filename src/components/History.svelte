@@ -1,20 +1,22 @@
 <script>
 	// store
-  import { history, selectState, addState } from "../stores/History.ts"
+  import history from "../stores/History.ts"
+  // store information
   import { game } from "../game.js"
-  
-  // Function props
-  // export let game
 
-  // $:console.log($history)
+  // function prop
+  export let updateState
 
-  function updateState(index) {
-    // $history = [...$history.slice(index)]
-    selectState(index)
-    addState(game.getStates(), game.getTurn())
-    // selectState(index)
-    // setSate($history.state)
-    // addState(game.getStates(), game.getTurn())
+  // Go back in game time
+  async function goBack(index) {
+    // remove states from history
+    history.selectState(index)
+    // update game state to the histories latest state
+    game.setStates($history[$history.length - 1].state)
+    // update game turn to the histories latest turn
+    game.setTurn($history[$history.length - 1].turn)
+    // update the board state
+    updateState()
   }
 </script>
 
@@ -22,7 +24,7 @@
 {#each $history as state, index}
   {#if index != ($history.length -1)}
     <div class="{index == 0 ? 'pb-4' : 'py-4'}">
-      <div on:click={() => updateState(index)}
+      <div on:click={() => goBack(index)}
         class="flex justify-center text-2xl cursor-pointer hover:underline">
         <h1> Go Back, </h1>
         <div class="ml-2">

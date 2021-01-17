@@ -1,4 +1,7 @@
 <script>
+	// libraries
+	import { tick } from 'svelte';
+	import { onMount } from 'svelte';
 	// Components
 	import Board from "../components/Board.svelte"
 	import Score from "../components/Score.svelte"
@@ -8,35 +11,46 @@
 	// js class
 	import { game } from "../game.js"
 	// store
-	import { history, addState, resetState } from "../stores/History.ts"
+	import history from "../stores/History.ts"
 
 	// Display states
 	let showHistory = true
-
+	
 	// game states
-	addState(game.getStates(), game.getTurn())
 	let score = game.getScore()
 	let agent_play = false
 	let outcome = null
+	let state
+	let turn
 
 	// notification states
 	let notification 
 	let show_notificaiton = false
 	
-	// Reactive Statments
-	$: state = $history[$history.length - 1].state
-	$: turn = $history[$history.length - 1].turn
+	// Reactive statements
+	// $:console.log($history.length)
 
-	$:console.log($history)
-	$:console.log(state)
-	
+	// life Cycle events
+	onMount(async () => {
+		history.addState({state: [...game.getStates()], turn: game.getTurn()})
+		await tick
+		updateState()
+	});
+
+	// Add to hisory and update board state / turn
+	async function updateState() {
+		state = $history[$history.length - 1].state
+		turn = $history[$history.length - 1].turn
+	}
 
 	/* Event triggered by selecting a move */
-  function selectMarker(index) {
+	async function selectMarker(index) {
 		outcome = game.updateState(index)
-		addState(game.getStates(), game.getTurn())
 		score = game.getScore()
 		if(outcome == 'win') {
+			history.addState({state: [...game.getStates()], turn: game.getTurn()})
+			await tick
+			updateState()
 			showNotification(winnerInfo(game.getWinner()))
 			reset()
 		} else if(outcome == 'tie') {
@@ -44,7 +58,11 @@
 			reset()
 		} else if(outcome == 'invalid') {
 			showNotification('Impossible Move')
-		} 
+		} else {
+			history.addState({state: [...game.getStates()], turn: game.getTurn()})
+			await tick
+			updateState()
+		}
   }
 	
 	/* display given text as a notification for 2 seconds */
@@ -68,12 +86,14 @@
 	}
 
 	/* Reset the game state */
-	function reset(timeout=1500){
+	async function reset(timeout=1500){
 		clearTimeout()
-		setTimeout(function(){ 
-			game.reset(); 
-			resetState();
-			addState(game.getStates(), game.getTurn())
+		setTimeout(async function(){ 
+			game.reset()
+			history.resetState()
+			history.addState({state: [...game.getStates()], turn: game.getTurn()})
+			await tick
+			updateState()
 		}, timeout);
 	}
 </script>
@@ -128,7 +148,9 @@
 			<div class="px-10 min-w-lg">
 				<h1 class="pt-10 text-6xl text-center sm:pt-0">History</h1>
 				<div class="py-10">
-					<History /> 
+					<History 
+						{updateState}
+					/> 
 				</div>
 			</div>
 		{/if}

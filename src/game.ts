@@ -27,9 +27,14 @@ class Game {
     this.score = [0, 0, 0]
   }
 
-  /* update the game  */
-  setState(state){
-    this.states = this.states
+  /* update the game state */
+  setStates(state){
+    this.states = [...state]
+  }
+
+  /* update the game turn */
+  setTurn(turn){
+    this.turn = turn
   }
 
   /* Returns the current game state */
