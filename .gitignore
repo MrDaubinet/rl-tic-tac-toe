@@ -7,3 +7,4 @@ yarn-error.log
 .config.json
 src/tailwind.css
 training_data/
+weights/

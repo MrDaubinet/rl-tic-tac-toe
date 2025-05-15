@@ -69,7 +69,7 @@ class LearningVisualizer:
     def plot_learning_curves(self, 
                            save_path: Optional[str] = None,
                            show_win_rate: bool = True,
-                           show_rewards: bool = True,
+                           show_rewards: bool = False,
                            window_size: int = 100) -> None:
         """
         Plot learning curves showing win rates and rewards over episodes.

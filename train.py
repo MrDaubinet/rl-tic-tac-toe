@@ -1,8 +1,9 @@
 import numpy as np
 from typing import List, Tuple
-from rl_agents.td_learning import TDAgentAdvance, TDAgentExporter
+from rl_agents.td_learning import TDAgent, LookAheadAgent, MonteCarloAgent
 from rl_agents.visualization import LearningVisualizer
 import os
+import argparse
 
 class TicTacToeEnv:
     """Simple Tic-Tac-Toe environment."""
@@ -28,7 +29,7 @@ class TicTacToeEnv:
             tuple: (new_state, reward, done)
         """
         if self.board[action] != '-':
-            return self.board.copy(), -10, True  # Invalid move
+            return self.board.copy(), -1, True  # Invalid move
         
         self.board[action] = self.current_player
         
@@ -38,7 +39,7 @@ class TicTacToeEnv:
         
         # Check for draw
         if '-' not in self.board:
-            return self.board.copy(), 0.0, True
+            return self.board.copy(), 0.5, True
         
         self.current_player = 'O' if self.current_player == 'X' else 'X'
         return self.board.copy(), 0.0, False
@@ -62,21 +63,37 @@ def random_opponent_move(board: List[str]) -> int:
     valid_moves = [i for i, mark in enumerate(board) if mark == '-']
     return np.random.choice(valid_moves) if valid_moves else -1
 
-def train_agent(episodes: int = 10000,
-                save_dir: str = 'training_data',
-                visualize_every: int = 100) -> None:
+def get_model(model: str):
+    if model == 'td':
+        return TDAgent
+    elif model == 'lookahead':
+        return LookAheadAgent
+    elif model == 'mc':
+        return MonteCarloAgent
+    else:
+        raise ValueError(f"Unknown model type: {model}")
+
+def train_agent(episodes: int,
+                save_dir: str,
+                visualize_every: int,
+                model: str,
+                weights_dir: str = 'weights',
+                decay_rate: float = 0.9999,
+                min_epsilon: float = 0.01,
+                random_agent: bool = False) -> None:
     """
-    Train two TD-learning agents via self-play and visualize their progress.
+    Train two agents via self-play and visualize their progress.
     """
+    AgentClass = get_model(model)
     env = TicTacToeEnv()
-    agent_O = TDAgentAdvance(learning_rate=0.1, discount_factor=0.9, epsilon=0.2,
-                            min_epsilon=0.01, epsilon_decay=0.995,
-                            min_learning_rate=0.01, learning_rate_decay=0.995,
-                            player='O')
-    agent_X = TDAgentAdvance(learning_rate=0.1, discount_factor=0.9, epsilon=0.2,
-                            min_epsilon=0.01, epsilon_decay=0.995,
-                            min_learning_rate=0.01, learning_rate_decay=0.995,
-                            player='X')
+    # Use same parameters for both agents
+    agent_params = {
+        'learning_rate': 0.01,
+        'discount_factor': 0.9,
+        'epsilon': 0.5
+    }
+    agent_O = AgentClass(**agent_params, player='O')
+    agent_X = AgentClass(**agent_params, player='X')
     visualizer = LearningVisualizer()
     os.makedirs(save_dir, exist_ok=True)
     wins_O = 0
@@ -89,45 +106,70 @@ def train_agent(episodes: int = 10000,
         done = False
         episode_reward_O = 0
         episode_reward_X = 0
+        invalid_moves_O = 0
+        invalid_moves_X = 0
+        agent_X.reset_episode()
+        agent_O.reset_episode()
         # Randomize starting player
         current_player = np.random.choice(['O', 'X'])
         while not done:
-            if current_player == 'O':
-                action = agent_O.choose_action(state)
-                next_state, reward, done = env.step(action)
-                state_key = agent_O.get_state_key(state)
-                next_state_key = agent_O.get_state_key(next_state)
-                agent_O.update(state_key, next_state_key, reward)
-                if done:
-                    episode_reward_O += reward
-                    episode_reward_X -= reward
-                    if reward == 1.0:
-                        wins_O += 1
-                    elif reward == 0.0:
-                        draws += 1
-                    break
-                state = next_state
-                current_player = 'X'
-            else:
+            if current_player == 'X':
                 action = agent_X.choose_action(state)
                 next_state, reward, done = env.step(action)
                 state_key = agent_X.get_state_key(state)
                 next_state_key = agent_X.get_state_key(next_state)
+                agent_X.add_to_history(state_key, action, reward)
                 agent_X.update(state_key, next_state_key, reward)
+
                 if done:
+                    agent_X.end_of_episode_update(reward)
                     episode_reward_X += reward
-                    episode_reward_O -= reward
-                    if reward == 1.0:
+                    if reward == 1:
                         wins_X += 1
-                    elif reward == 0.0:
+                    elif reward == 0.5:
                         draws += 1
                     break
                 state = next_state
                 current_player = 'O'
+            else:
+                if random_agent:
+                    # Random opponent's turn (O)
+                    valid_moves = [i for i, mark in enumerate(state) if mark == '-']
+                    if valid_moves:
+                        o_action = np.random.choice(valid_moves)
+                        state, reward, done = env.step(o_action)
+                        
+                        if done:
+                            episode_reward_O += reward
+                            if reward == 1:
+                                wins_O += 1
+                            elif reward == 0.5:
+                                draws += 1
+                            break
+                else:
+                    action = agent_O.choose_action(state)
+                    next_state, reward, done = env.step(action)
+                    state_key = agent_O.get_state_key(state)
+                    next_state_key = agent_O.get_state_key(next_state)
+                    agent_O.add_to_history(state_key, action, reward)
+                    agent_O.update(state_key, next_state_key, reward)
+                    
+                    if done:
+                        agent_O.end_of_episode_update(reward)
+                        episode_reward_O += reward
+                        if reward == 1:
+                            wins_O += 1
+                        elif reward == 0.5:
+                            draws += 1
+                        break
+
+                    state = next_state
+                current_player = 'X'
+                
         total_games += 1
-        # Decay epsilon and learning rate for both agents
-        agent_O.on_episode_end()
-        agent_X.on_episode_end()
+        # Epsilon decay for both agents
+        agent_O.decay_epsilon(decay_rate=decay_rate, min_epsilon=min_epsilon)
+        agent_X.decay_epsilon(decay_rate=decay_rate, min_epsilon=min_epsilon)
         # Update visualization data for O (can also do for X if desired)
         if episode % visualize_every == 0:
             win_rate_O = wins_O / total_games
@@ -174,13 +216,34 @@ def train_agent(episodes: int = 10000,
             print(f"Episode {episode}/{episodes}")
             print(f"O Win Rate: {win_rate_O:.2f} | X Win Rate: {win_rate_X:.2f} | Draws: {draws/total_games:.2f}")
             print(f"Episode Reward (O): {episode_reward_O:.2f} | (X): {episode_reward_X:.2f}")
+            print(f"Invalid moves: O={invalid_moves_O}, X={invalid_moves_X}")
             print(f"Value function range: [{values.min():.2f}, {values.max():.2f}]")
             print("Saved: learning curves, value heatmap, policy heatmap, value distribution.")
             print("-" * 40)
 
-    # After training, export both agents
-    TDAgentExporter.export_to_json(agent_O, 'web-app/static/agent_O.json')
-    TDAgentExporter.export_to_json(agent_X, 'web-app/static/agent_X.json')
+    # After training, save both agents to the weights directory
+    # agent_O.save(directory=weights_dir)
+    agent_X.save(directory=weights_dir)
 
 if __name__ == "__main__":
-    train_agent(episodes=50000, visualize_every=1000) 
+    parser = argparse.ArgumentParser(description="Train a TD or Self-Play agent for Tic-Tac-Toe.")
+    parser.add_argument('--episodes', type=int, default=50000, help='Number of training episodes')
+    parser.add_argument('--visualize_every', type=int, default=1000, help='Visualization interval')
+    parser.add_argument('--model', type=str, choices=['td', 'lookahead'], default='td', help="Agent type: 'td', 'selfplay', or 'mc'")
+    parser.add_argument('--save_dir', type=str, default='training_data', help='Directory to save training data')
+    parser.add_argument('--weights_dir', type=str, default='weights', help='Directory to save agent weights')
+    parser.add_argument('--decay_rate', type=float, default=0.9999, help='Epsilon decay rate per episode')
+    parser.add_argument('--min_epsilon', type=float, default=0.01, help='Minimum epsilon value')
+    parser.add_argument('--random_agent', type=bool, default=False, help='Random agent')
+    parser.add_argument('--selfplay', type=bool, default=False, help='Self-play')
+    args = parser.parse_args()
+    train_agent(
+        episodes=args.episodes, 
+        visualize_every=args.visualize_every, 
+        model=args.model, 
+        save_dir=args.save_dir, 
+        weights_dir=args.weights_dir, 
+        decay_rate=args.decay_rate, 
+        min_epsilon=args.min_epsilon,
+        random_agent=args.random_agent
+    ) 
