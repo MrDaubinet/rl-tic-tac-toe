@@ -8,26 +8,63 @@ Tic-Tac-Toe is a two player competitive game where players take turns marking sp
 ### Win condition
 The player who succeeds in placing three of their marks in a horizontal, vertical, or diagonal row is the winner.
 
-## Algorithms
-The algorithms are implemented in the `/rl-agents`. The [README.md](rl-agents/README.md) for more information. Implemented agents include
+## Agents
+All algorithms are implemented in the `/rl-agents` directory, with its own [README.md](rl-agents/README.md). 
 
-1. Temporal Difference Learning: is a method of learning from experience to predict future rewards. It is a combination of Monte Carlo methods and Dynamic Programming.
+## Training
 
-2. Value based: Q-learning is a value based algorithm that uses a Q-table to store the value of each action in each state. The agent uses the Q-table to choose the best action to take in each state.
+The training script (`train.py`) offers several options for training RL agents:
 
-3. Policy based: PPO is a policy based algorithm that uses a neural network to approximate the policy function. The agent uses the neural network to choose the best action to take in each state.
+### Training Modes
+* **Self-play**: Agent plays against itself, learning from both X and O positions
+* **Random Opponent**: Agent plays against a random-move opponent
+* **Two Agents**: Train two separate agents against each other
 
-I've also added a visualisation screen for plotting. The Reports on training these agents are displayed in this Weights & Biases report. 
+### Training Parameters
+```bash
+python train.py [options]
+--episodes        Number of training episodes (default: 10000)
+--visualize_every Visualization interval (default: 1000)
+--model          Agent type: 'td' or 'lookahead' (default: 'td')
+--selfplay       Enable self-play mode
+--random_agent   Use random opponent
+```
 
-<br>
+### Test Case Evaluation
+The trainer automatically evaluates the agent's performance on key board states:
+* Horizontal winning opportunities
+* Diagonal winning opportunities
+* Vertical blocking opportunities
 
-* 
+This helps track if the agent is learning optimal strategies in critical game situations.
 
-* 
+## Visualising
 
-* 
+The training process generates several visualizations to track agent performance:
 
-## Technologies
+### Learning Curves
+* Win rates for both X and O players over time
+* Episode rewards tracking
+* Test case accuracy showing improvement on key board states
+
+### Board State Analysis
+* Value function heatmaps showing the agent's evaluation of different moves
+* Policy heatmaps highlighting the agent's preferred actions
+* Value distribution plots showing the range of state valuations
+
+### Saving and Loading
+* All visualizations are automatically saved in the specified save directory
+* Training data is preserved for future analysis
+* Plots are generated every N episodes (configurable via --visualize_every)
+
+Example visualization output:
+* `learning_curves_{episode}.png`: Win rates and rewards over time
+* `accuracy_curve_{episode}.png`: Performance on test cases
+* `value_heatmap_{episode}.png`: Value function visualization
+* `policy_heatmap_{episode}.png`: Action preferences
+* `value_distribution_{episode}.png`: Distribution of state values
+
+# Testing
 Svelte.js, Sapper.js, tailwind.css, Firebase Hosting
 
 ## How to run

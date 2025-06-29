@@ -6,5 +6,5 @@ yarn-error.log
 /__sapper__/
 .config.json
 src/tailwind.css
-training_data/
-weights/
+*training_data/
+*checkpoints/

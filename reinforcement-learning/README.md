@@ -1,5 +1,13 @@
 # Reinforcement Learning Visualization Module
 
+## Algorithms
+
+1. Temporal Difference Learning: is a method of learning from experience to predict future rewards. It is a combination of Monte Carlo methods and Dynamic Programming.
+
+2. Value based: Q-learning is a value based algorithm that uses a Q-table to store the value of each action in each state. The agent uses the Q-table to choose the best action to take in each state.
+
+3. Policy based: PPO is a policy based algorithm that uses a neural network to approximate the policy function. The agent uses the neural network to choose the best action to take in each state.
+
 ## Overview
 This module provides comprehensive visualization tools for tracking and analyzing the performance of reinforcement learning algorithms, specifically designed for the Tic-Tac-Toe learning environment. It offers intuitive visualizations of learning progress, win rates, rewards, and value functions.
 
@@ -62,5 +70,6 @@ visualizer.plot_value_function_heatmap(board_state, save_path='value_function.pn
 - Intuitive interpretation of learned strategies
 - Support for any valid board state
 
+## Types of agents implemented
 
 
