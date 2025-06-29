@@ -1,352 +1,523 @@
 #!/usr/bin/env python3
 """
-Comprehensive benchmark system for evaluating trained RL agents.
-Loads checkpoints and compares performance across different opponents and test scenarios.
+Model Matrix Benchmark: Latest checkpoint from each model vs every other model.
+Creates a comprehensive comparison matrix between different training approaches.
 """
 
 import os
+import json
 import pickle
 import argparse
 import numpy as np
 from typing import Dict, List, Tuple, Optional
-from agents.td_learning import TDAgent, LookAheadAgent, RandomAgent
-from evaluation import (
-    evaluate_enhanced, play_single_game,
-    TACTICAL_TEST_CASES_X, TACTICAL_TEST_CASES_O,
-    STRATEGIC_TEST_CASES_X, STRATEGIC_TEST_CASES_O,
-    MULTI_MOVE_TEST_CASES_X, MULTI_MOVE_TEST_CASES_O
-)
+from agents.td_learning import TDAgent, LookAheadAgent, QLearning, RandomAgent
+from evaluation import play_single_game
 
-class BenchmarkSuite:
-    """Comprehensive benchmark suite for RL agents"""
+class DualRoleAgent:
+    """Agent that can play both X and O roles with different value functions"""
     
-    def __init__(self, checkpoint_dir: str = 'checkpoints'):
-        self.checkpoint_dir = checkpoint_dir
-        self.baseline_agents = {
-            'Random': RandomAgent(),
-            'Fresh TD': TDAgent(),
-            'Fresh LookAhead': LookAheadAgent()
-        }
+    def __init__(self, agent_class, x_value_function, o_value_function, **kwargs):
+        self.agent_class = agent_class
+        self.x_value_function = x_value_function
+        self.o_value_function = o_value_function
+        self.kwargs = kwargs
+        self._current_agent = None
+        self._current_role = None
+    
+    def _get_agent_for_role(self, role):
+        """Get the appropriate agent instance for the given role"""
+        if self._current_role != role:
+            self._current_agent = self.agent_class(**self.kwargs)
+            self._current_agent.epsilon = 0.0  # Evaluation mode
+            self._current_agent.set_role(role)  # Set the role on the agent
+            if role == 'X':
+                self._current_agent.value_function = self.x_value_function
+            else:
+                self._current_agent.value_function = self.o_value_function
+            self._current_role = role
+        return self._current_agent
+    
+    def choose_action(self, state, role='X'):
+        """Choose action for the given role"""
+        agent = self._get_agent_for_role(role)
+        return agent.choose_action(state)
+    
+    def get_state_value(self, state, role='X'):
+        """Get state value for the given role"""
+        agent = self._get_agent_for_role(role)
+        return agent.get_state_value(state)
+
+class RandomDualRoleAgent:
+    """Random agent that can play both X and O roles"""
+    
+    def __init__(self):
+        self.agent = RandomAgent()
+    
+    def choose_action(self, state, role='X'):
+        """Choose random action for any role"""
+        self.agent.set_role(role)
+        return self.agent.choose_action(state)
+
+class ModelMatrixBenchmark:
+    """Benchmark suite that compares latest checkpoints from different model types"""
+    
+    def __init__(self, weights_dir: str = './weights'):
+        self.weights_dir = weights_dir
         
-    def load_checkpoint(self, filename: str) -> Tuple[TDAgent, int]:
-        """Load agent from checkpoint file"""
-        with open(filename, 'rb') as f:
-            checkpoint_data = pickle.load(f)
+    def load_json_weights(self, x_filepath: str, o_filepath: str, agent_type: str) -> DualRoleAgent:
+        """Load agent from JSON weights files for both X and O"""
+        with open(x_filepath, 'r') as f:
+            x_weights_data = json.load(f)
         
-        # Determine agent class from saved type
-        if checkpoint_data['agent_type'] == 'LookAheadAgent':
+        with open(o_filepath, 'r') as f:
+            o_weights_data = json.load(f)
+        
+        # Determine agent class based on type
+        if agent_type == 'LookAheadAgent':
             agent_class = LookAheadAgent
-        else:
+        elif agent_type == 'QLearning':
+            agent_class = QLearning
+        elif agent_type == 'TDAgent':
             agent_class = TDAgent
+        elif agent_type == 'SelfPlayAgent':
+            agent_class = TDAgent  # Using TDAgent as fallback
+        else:
+            agent_class = TDAgent  # Default fallback
             
-        # Create agent with same parameters
-        agent = agent_class(
-            learning_rate=checkpoint_data['learning_rate'],
-            discount_factor=checkpoint_data['discount_factor'],
-            epsilon=checkpoint_data['epsilon']
+        # Create dual-role agent
+        dual_agent = DualRoleAgent(
+            agent_class=agent_class,
+            x_value_function=x_weights_data,
+            o_value_function=o_weights_data
         )
         
-        # Restore learned state
-        agent.value_function = checkpoint_data['value_function']
-        agent.epsilon = checkpoint_data['epsilon']
-        
-        return agent, checkpoint_data['episode']
+        return dual_agent
     
-    def find_checkpoints(self) -> List[Tuple[str, str, int]]:
-        """Find all checkpoint files and return (name, filepath, episode)"""
-        checkpoints = []
-        if not os.path.exists(self.checkpoint_dir):
-            print(f"Checkpoint directory {self.checkpoint_dir} not found!")
-            return checkpoints
-            
-        for filename in sorted(os.listdir(self.checkpoint_dir)):
-            if filename.endswith('.pkl'):
-                filepath = os.path.join(self.checkpoint_dir, filename)
-                try:
-                    _, episode = self.load_checkpoint(filepath)
-                    name = f"Episode {episode}"
-                    checkpoints.append((name, filepath, episode))
-                except Exception as e:
-                    print(f"Failed to load {filename}: {e}")
+    def find_model_types(self) -> Dict[str, Dict[str, str]]:
+        """Find all model types and their weight files"""
+        models = {}
         
-        return checkpoints
+        if not os.path.exists(self.weights_dir):
+            print(f"Weights directory {self.weights_dir} not found!")
+            return models
+        
+        # Check for paired X/O files in root directory
+        json_files = [f for f in os.listdir(self.weights_dir) if f.endswith('.json')]
+        
+        # Group by model type (everything before _X or _O)
+        model_pairs = {}
+        for json_file in json_files:
+            if '_X.json' in json_file:
+                model_name = json_file.replace('_X.json', '')
+                if model_name not in model_pairs:
+                    model_pairs[model_name] = {}
+                model_pairs[model_name]['X'] = os.path.join(self.weights_dir, json_file)
+            elif '_O.json' in json_file:
+                model_name = json_file.replace('_O.json', '')
+                if model_name not in model_pairs:
+                    model_pairs[model_name] = {}
+                model_pairs[model_name]['O'] = os.path.join(self.weights_dir, json_file)
+        
+        # Only include models that have both X and O files
+        for model_name, files in model_pairs.items():
+            if 'X' in files and 'O' in files:
+                models[model_name] = files
+        
+        # Check subdirectories for different training runs
+        for subdir in os.listdir(self.weights_dir):
+            subdir_path = os.path.join(self.weights_dir, subdir)
+            if os.path.isdir(subdir_path):
+                # Find JSON files in this subdirectory
+                json_files = [f for f in os.listdir(subdir_path) if f.endswith('.json')]
+                
+                # Group by model type within subdirectory
+                subdir_pairs = {}
+                for json_file in json_files:
+                    if '_X.json' in json_file:
+                        model_name = json_file.replace('_X.json', '')
+                        if model_name not in subdir_pairs:
+                            subdir_pairs[model_name] = {}
+                        subdir_pairs[model_name]['X'] = os.path.join(subdir_path, json_file)
+                    elif '_O.json' in json_file:
+                        model_name = json_file.replace('_O.json', '')
+                        if model_name not in subdir_pairs:
+                            subdir_pairs[model_name] = {}
+                        subdir_pairs[model_name]['O'] = os.path.join(subdir_path, json_file)
+                
+                # Add complete pairs with subdirectory prefix
+                for model_name, files in subdir_pairs.items():
+                    if 'X' in files and 'O' in files:
+                        full_model_name = f"{subdir}_{model_name}"
+                        models[full_model_name] = files
+        
+        return models
     
-    def evaluate_single_agent(self, agent, agent_name: str, games_per_opponent: int = 100) -> Dict:
-        """Evaluate a single agent against all baseline opponents"""
-        print(f"\n📊 Evaluating {agent_name}")
-        print("-" * 50)
-        
-        results = {}
-        total_strength = 0
-        
-        # Test against baseline opponents
-        for opponent_name, opponent in self.baseline_agents.items():
-            print(f"  vs {opponent_name:15}...", end=" ")
-            wins = draws = losses = 0
+    def load_model(self, model_name: str, model_files: Dict[str, str]) -> DualRoleAgent:
+        """Load a model and return a DualRoleAgent"""
+        try:
+            # Extract agent type from model name
+            if 'QLearning' in model_name:
+                agent_type = 'QLearning'
+            elif 'LookAhead' in model_name:
+                agent_type = 'LookAheadAgent'
+            elif 'TD' in model_name:
+                agent_type = 'TDAgent'
+            elif 'MonteCarlo' in model_name or 'mc_' in model_name:
+                agent_type = 'MonteCarloAgent'
+            elif 'SelfPlay' in model_name or 'selfplay' in model_name:
+                agent_type = 'SelfPlayAgent'
+            else:
+                agent_type = 'TDAgent'  # Default
             
-            for _ in range(games_per_opponent):
-                result = play_single_game(agent, opponent)
-                if result == 1:
-                    wins += 1
-                elif result == 0:
-                    draws += 1
+            agent = self.load_json_weights(
+                model_files['X'], 
+                model_files['O'], 
+                agent_type
+            )
+            
+            return agent
+            
+        except Exception as e:
+            print(f"Failed to load {model_name}: {e}")
+            return None
+    
+    def play_game_with_roles(self, agent1, agent2) -> int:
+        """Play a game where agent1 is X and agent2 is O"""
+        from environment import TicTacToeEnv
+        
+        env = TicTacToeEnv()
+        state = env.reset()
+        done = False
+        
+        while not done:
+            if env.current_player == 'X':
+                # Agent1 plays as X
+                action = agent1.choose_action(state, role='X')
+            else:
+                # Agent2 plays as O
+                action = agent2.choose_action(state, role='O')
+            
+            # Validate action
+            if action < 0 or action >= 9 or state[action] != '-':
+                # Invalid move - current player loses
+                if env.current_player == 'X':
+                    return -1  # Agent2 (O) wins
                 else:
-                    losses += 1
+                    return 1  # Agent1 (X) wins
             
-            win_rate = wins / games_per_opponent
-            draw_rate = draws / games_per_opponent
-            loss_rate = losses / games_per_opponent
+            state, reward, done = env.step(action)
             
-            results[opponent_name] = {
-                'wins': wins,
-                'draws': draws, 
-                'losses': losses,
-                'win_rate': win_rate,
-                'draw_rate': draw_rate,
-                'loss_rate': loss_rate
-            }
-            
-            total_strength += win_rate
-            print(f"W:{win_rate:5.1%} D:{draw_rate:5.1%} L:{loss_rate:5.1%}")
+            if done:
+                if reward == 1.0:
+                    # Current player won
+                    if env.current_player == 'X':
+                        return 1  # Agent1 (X) won
+                    else:
+                        return -1  # Agent2 (O) won
+                elif reward == 0.5:
+                    return 0  # Draw
+                else:
+                    # Invalid move - opponent wins
+                    if env.current_player == 'X':
+                        return -1  # Agent2 (O) wins
+                    else:
+                        return 1  # Agent1 (X) wins
         
-        # Enhanced skill evaluation
-        print(f"  Skill Analysis...", end=" ")
-        enhanced_results = evaluate_enhanced(agent, RandomAgent(), 'random')
-        skills = enhanced_results['agent1']
-        
-        results['skills'] = skills
-        results['overall_strength'] = total_strength / len(self.baseline_agents)
-        
-        print(f"T:{skills['tactical']:4.1%} S:{skills['strategic']:4.1%} M:{skills['multi_move']:4.1%}")
-        
-        return results
+        return 0  # Should not reach here
     
-    def head_to_head_tournament(self, checkpoints: List[Tuple[str, str, int]], 
-                               games_per_matchup: int = 50) -> Tuple[Dict, List]:
-        """Run round-robin tournament between all checkpoints"""
-        print(f"\n🏆 HEAD-TO-HEAD TOURNAMENT")
-        print(f"{'='*70}")
+    def run_matrix_benchmark(self, games_per_matchup: int = 100) -> Tuple[Dict, Dict, List]:
+        """Run comprehensive matrix benchmark between all model types"""
+        print("🚀 MODEL MATRIX BENCHMARK")
+        print("=" * 80)
         
-        agents = []
-        for name, filepath, episode in checkpoints:
-            agent, _ = self.load_checkpoint(filepath)
-            agents.append((name, agent, episode))
+        # Find all model types
+        models = self.find_model_types()
+        if not models:
+            print("No complete model pairs found!")
+            return {}, {}, []
         
-        if len(agents) < 2:
-            print("Need at least 2 agents for tournament")
-            return {}, []
+        print(f"Found {len(models)} trained model types:")
+        for model_name in models.keys():
+            print(f"  • {model_name}")
         
-        # Round-robin results matrix
+        # Load all agents
+        all_agents = []
+        
+        # Add trained models
+        for model_name, model_files in models.items():
+            agent = self.load_model(model_name, model_files)
+            if agent is not None:
+                all_agents.append((model_name, agent))
+        
+        # Add random agent
+        random_agent = RandomDualRoleAgent()
+        all_agents.append(("Random", random_agent))
+        
+        if len(all_agents) < 2:
+            print("Need at least 2 agents for matrix benchmark")
+            return {}, {}, []
+        
+        print(f"\nLoaded {len(all_agents)} agents total:")
+        for agent_name, _ in all_agents:
+            print(f"  • {agent_name}")
+        print()
+        
+        # Create results matrix
         results_matrix = {}
+        win_counts = {}
         
-        print(f"Running {len(agents)} x {len(agents)} tournament...")
-        for i, (name1, agent1, ep1) in enumerate(agents):
+        print("🎯 RUNNING MATRIX MATCHES")
+        print("=" * 80)
+        
+        for i, (name1, agent1) in enumerate(all_agents):
             results_matrix[name1] = {}
+            win_counts[name1] = {'wins': 0, 'draws': 0, 'losses': 0, 'total_games': 0}
             
-            for j, (name2, agent2, ep2) in enumerate(agents):
+            for j, (name2, agent2) in enumerate(all_agents):
                 if i == j:
-                    results_matrix[name1][name2] = "---"
+                    # Self-play: agent plays against itself
+                    print(f"  {name1:25} vs {name2:25} ... ", end="")
+                    
+                    wins = draws = losses = 0
+                    
+                    # For self-play, we still alternate roles but it's the same agent
+                    for game in range(games_per_matchup):
+                        if game % 2 == 0:
+                            # Agent1 plays X, Agent2 (same) plays O
+                            result = self.play_game_with_roles(agent1, agent2)
+                        else:
+                            # Agent2 (same) plays X, Agent1 plays O (flip result)
+                            result = -self.play_game_with_roles(agent2, agent1)
+                        
+                        if result == 1:
+                            wins += 1
+                        elif result == 0:
+                            draws += 1
+                        else:
+                            losses += 1
+                    
+                    win_rate = wins / games_per_matchup
+                    draw_rate = draws / games_per_matchup
+                    loss_rate = losses / games_per_matchup
+                    
+                    results_matrix[name1][name2] = {
+                        'win_rate': win_rate,
+                        'draw_rate': draw_rate,
+                        'loss_rate': loss_rate,
+                        'wins': wins,
+                        'draws': draws,
+                        'losses': losses
+                    }
+                    
+                    # Update win counts (self-play contributes to overall stats)
+                    win_counts[name1]['wins'] += wins
+                    win_counts[name1]['draws'] += draws
+                    win_counts[name1]['losses'] += losses
+                    win_counts[name1]['total_games'] += games_per_matchup
+                    
+                    print(f"W:{win_rate:5.1%} D:{draw_rate:5.1%} L:{loss_rate:5.1%}")
                     continue
                 
-                print(f"  {name1} vs {name2}...", end=" ")
-                wins = draws = 0
+                print(f"  {name1:25} vs {name2:25} ... ", end="")
                 
-                for _ in range(games_per_matchup):
-                    result = play_single_game(agent1, agent2)
+                wins = draws = losses = 0
+                
+                # Play games with both role assignments
+                for game in range(games_per_matchup):
+                    if game % 2 == 0:
+                        # Agent1 plays X, Agent2 plays O
+                        result = self.play_game_with_roles(agent1, agent2)
+                    else:
+                        # Agent2 plays X, Agent1 plays O (flip result)
+                        result = -self.play_game_with_roles(agent2, agent1)
+                    
                     if result == 1:
                         wins += 1
                     elif result == 0:
                         draws += 1
+                    else:
+                        losses += 1
                 
                 win_rate = wins / games_per_matchup
                 draw_rate = draws / games_per_matchup
-                results_matrix[name1][name2] = f"{win_rate:.1%}"
-                print(f"{win_rate:.1%} wins")
+                loss_rate = losses / games_per_matchup
+                
+                results_matrix[name1][name2] = {
+                    'win_rate': win_rate,
+                    'draw_rate': draw_rate,
+                    'loss_rate': loss_rate,
+                    'wins': wins,
+                    'draws': draws,
+                    'losses': losses
+                }
+                
+                # Update win counts
+                win_counts[name1]['wins'] += wins
+                win_counts[name1]['draws'] += draws
+                win_counts[name1]['losses'] += losses
+                win_counts[name1]['total_games'] += games_per_matchup
+                
+                print(f"W:{win_rate:5.1%} D:{draw_rate:5.1%} L:{loss_rate:5.1%}")
         
-        # Calculate overall tournament strength
-        strength_scores = []
-        for name1, agent1, ep1 in agents:
-            total_wins = total_games = 0
-            
-            for name2, agent2, ep2 in agents:
-                if name1 != name2:
-                    wins = 0
-                    for _ in range(games_per_matchup):
-                        result = play_single_game(agent1, agent2)
-                        if result == 1:
-                            wins += 1
-                    total_wins += wins
-                    total_games += games_per_matchup
-            
-            overall_strength = total_wins / total_games if total_games > 0 else 0
-            strength_scores.append((overall_strength, name1, ep1))
-        
-        strength_scores.sort(reverse=True)
-        
-        return results_matrix, strength_scores
+        return results_matrix, win_counts, all_agents
     
-    def print_tournament_results(self, results_matrix: Dict, strength_scores: List):
-        """Print formatted tournament results"""
-        if not results_matrix or not strength_scores:
-            return
-            
-        print(f"\n📋 TOURNAMENT RESULTS MATRIX")
-        print(f"{'='*70}")
+    def print_results_matrix(self, results_matrix: Dict, win_counts: Dict, all_agents: List):
+        """Print formatted results matrix with improved readability"""
+        agent_names = [name for name, _ in all_agents]
         
-        # Header
-        agent_names = list(results_matrix.keys())
-        print(f"{'':15}", end="")
+        print(f"\n" + "="*120)
+        print(f"📊 COMPREHENSIVE RESULTS MATRIX")
+        print(f"="*120)
+        print(f"Each cell shows: Win% | Draw% | Loss%")
+        print(f"Row agent vs Column agent")
+        print(f"Self-play results shown in [brackets] - measures consistency when agent plays both X and O")
+        print(f"="*120)
+        
+        # Calculate column widths
+        name_width = max(len(name) for name in agent_names) + 2
+        cell_width = 12
+        
+        # Print header
+        print(f"{'Agent':<{name_width}}", end="")
         for name in agent_names:
-            print(f"{name:>12}", end="")
+            short_name = name[:10] if len(name) > 10 else name
+            print(f"{short_name:^{cell_width}}", end="")
+        print(f"{'Overall':^{cell_width}}")
+        
+        # Print separator
+        print("-" * (name_width + cell_width * (len(agent_names) + 1)))
+        
+        # Print each row
+        for name1 in agent_names:
+            print(f"{name1:<{name_width}}", end="")
+            
+            for name2 in agent_names:
+                result = results_matrix[name1][name2]
+                w = int(result['win_rate'] * 100)
+                d = int(result['draw_rate'] * 100)
+                l = int(result['loss_rate'] * 100)
+                if name1 == name2:
+                    # Self-play: highlight with different format
+                    cell_text = f"[{w:2d}|{d:2d}|{l:2d}]"
+                else:
+                    cell_text = f"{w:2d}|{d:2d}|{l:2d}"
+                print(f"{cell_text:^{cell_width}}", end="")
+            
+            # Calculate overall win rate
+            total_wins = win_counts[name1]['wins']
+            total_games = win_counts[name1]['total_games']
+            overall_rate = int((total_wins / total_games * 100)) if total_games > 0 else 0
+            print(f"{overall_rate:^{cell_width}}")
+        
         print()
         
-        # Rows
+        # Print win rate matrix (simplified)
+        print(f"\n" + "="*80)
+        print(f"🏆 WIN RATE MATRIX (Percentage)")
+        print(f"="*80)
+        
+        # Print header
+        print(f"{'Agent':<{name_width}}", end="")
+        for name in agent_names:
+            short_name = name[:8] if len(name) > 8 else name
+            print(f"{short_name:>8}", end="")
+        print(f"{'Overall':>8}")
+        
+        # Print separator
+        print("-" * (name_width + 8 * (len(agent_names) + 1)))
+        
+        # Print each row
         for name1 in agent_names:
-            print(f"{name1:15}", end="")
+            print(f"{name1:<{name_width}}", end="")
+            
             for name2 in agent_names:
-                print(f"{results_matrix[name1][name2]:>12}", end="")
-            print()
+                result = results_matrix[name1][name2]
+                win_pct = int(result['win_rate'] * 100)
+                if name1 == name2:
+                    # Self-play: show in brackets
+                    print(f"[{win_pct:>2}%]", end="")
+                else:
+                    print(f"{win_pct:>7}%", end="")
+            
+            # Calculate overall win rate
+            total_wins = win_counts[name1]['wins']
+            total_games = win_counts[name1]['total_games']
+            overall_rate = int((total_wins / total_games * 100)) if total_games > 0 else 0
+            print(f"{overall_rate:>7}%")
         
-        print(f"\n🏅 TOURNAMENT RANKINGS")
-        print(f"{'='*70}")
-        for rank, (strength, name, episode) in enumerate(strength_scores, 1):
-            medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}."
-            print(f"{medal:3} {name:20} {strength:6.1%} overall win rate")
-    
-    def skill_progression_analysis(self, checkpoints: List[Tuple[str, str, int]]):
-        """Analyze how skills develop over training"""
-        print(f"\n📈 SKILL PROGRESSION ANALYSIS")
-        print(f"{'='*70}")
+        # Print ranking
+        print(f"\n" + "="*60)
+        print(f"🥇 AGENT RANKINGS")
+        print(f"="*60)
         
-        skill_data = []
-        for name, filepath, episode in sorted(checkpoints, key=lambda x: x[2]):
-            agent, _ = self.load_checkpoint(filepath)
-            enhanced_results = evaluate_enhanced(agent, RandomAgent(), 'random')
-            skills = enhanced_results['agent1']
-            skill_data.append((episode, skills))
+        # Sort agents by overall performance
+        sorted_agents = sorted(win_counts.items(), 
+                             key=lambda x: x[1]['wins'] / max(x[1]['total_games'], 1), 
+                             reverse=True)
         
-        print(f"{'Episode':>8} {'Tactical':>9} {'Strategic':>10} {'Multi-move':>11} {'Overall':>9}")
+        print(f"{'Rank':>4} {'Agent':<25} {'Win Rate':>10} {'Draw Rate':>10} {'Total Games':>12}")
         print("-" * 60)
         
-        for episode, skills in skill_data:
-            overall = (skills['tactical'] + skills['strategic'] + skills['multi_move']) / 3
-            print(f"{episode:>8} {skills['tactical']:>8.1%} {skills['strategic']:>9.1%} "
-                  f"{skills['multi_move']:>10.1%} {overall:>8.1%}")
-    
-    def run_comprehensive_benchmark(self, games_per_opponent: int = 100, 
-                                   games_per_matchup: int = 50):
-        """Run the complete benchmark suite"""
-        print(f"🚀 COMPREHENSIVE RL AGENT BENCHMARK")
-        print(f"{'='*70}")
+        for rank, (name, stats) in enumerate(sorted_agents, 1):
+            if stats['total_games'] > 0:
+                win_rate = stats['wins'] / stats['total_games']
+                draw_rate = stats['draws'] / stats['total_games']
+                medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}."
+                print(f"{medal:>4} {name:<25} {win_rate:>9.1%} {draw_rate:>9.1%} {stats['total_games']:>12}")
         
-        # Find all checkpoints
-        checkpoints = self.find_checkpoints()
-        if not checkpoints:
-            print("No checkpoints found! Train some agents first.")
-            return
+        print()
         
-        print(f"Found {len(checkpoints)} checkpoints:")
-        for name, _, episode in checkpoints:
-            print(f"  • {name}")
+        # Print insights
+        print(f"\n" + "="*60)
+        print(f"💡 KEY INSIGHTS")
+        print(f"="*60)
         
-        # Individual agent evaluation
-        print(f"\n🎯 INDIVIDUAL AGENT EVALUATION")
-        print(f"{'='*70}")
+        # Find best and worst performers
+        best_agent = sorted_agents[0]
+        worst_agent = sorted_agents[-1]
         
-        all_results = {}
-        for name, filepath, episode in checkpoints:
-            agent, _ = self.load_checkpoint(filepath)
-            results = self.evaluate_single_agent(agent, name, games_per_opponent)
-            all_results[name] = results
+        print(f"🏆 Best Performer: {best_agent[0]}")
+        best_win_rate = best_agent[1]['wins'] / best_agent[1]['total_games']
+        best_draw_rate = best_agent[1]['draws'] / best_agent[1]['total_games']
+        print(f"   Win Rate: {best_win_rate:.1%}, Draw Rate: {best_draw_rate:.1%}")
         
-        # Tournament between checkpoints
-        if len(checkpoints) > 1:
-            results_matrix, strength_scores = self.head_to_head_tournament(
-                checkpoints, games_per_matchup)
-            self.print_tournament_results(results_matrix, strength_scores)
+        print(f"\n📉 Needs Improvement: {worst_agent[0]}")
+        worst_win_rate = worst_agent[1]['wins'] / worst_agent[1]['total_games']
+        worst_draw_rate = worst_agent[1]['draws'] / worst_agent[1]['total_games']
+        print(f"   Win Rate: {worst_win_rate:.1%}, Draw Rate: {worst_draw_rate:.1%}")
         
-        # Skill progression analysis
-        if len(checkpoints) > 1:
-            self.skill_progression_analysis(checkpoints)
+        # Find highest draw rate
+        highest_draw = max(sorted_agents, key=lambda x: x[1]['draws'] / max(x[1]['total_games'], 1))
+        highest_draw_rate = highest_draw[1]['draws'] / highest_draw[1]['total_games']
+        print(f"\n🤝 Most Draws: {highest_draw[0]} ({highest_draw_rate:.1%})")
         
-        # Summary and recommendations
-        self.print_summary_and_recommendations(all_results, checkpoints)
-    
-    def print_summary_and_recommendations(self, all_results: Dict, 
-                                        checkpoints: List[Tuple[str, str, int]]):
-        """Print final summary and training recommendations"""
-        print(f"\n💡 SUMMARY & RECOMMENDATIONS")
-        print(f"{'='*70}")
+        # Self-play analysis
+        print(f"\n🔄 SELF-PLAY ANALYSIS:")
+        for name in agent_names:
+            self_result = results_matrix[name][name]
+            self_draw_rate = self_result['draw_rate']
+            self_win_rate = self_result['win_rate']
+            consistency = "High" if self_draw_rate > 0.6 else "Medium" if self_draw_rate > 0.3 else "Low"
+            print(f"   {name}: {self_draw_rate:.1%} draws, {self_win_rate:.1%} wins - {consistency} consistency")
         
-        if not all_results:
-            return
-        
-        # Find best performing agent
-        best_agent = max(all_results.items(), 
-                        key=lambda x: x[1]['overall_strength'])
-        best_name, best_results = best_agent
-        
-        print(f"🏆 Best Overall Agent: {best_name}")
-        print(f"   Overall Strength: {best_results['overall_strength']:.1%}")
-        print(f"   Skills - Tactical: {best_results['skills']['tactical']:.1%}, "
-              f"Strategic: {best_results['skills']['strategic']:.1%}, "
-              f"Multi-move: {best_results['skills']['multi_move']:.1%}")
-        
-        # Performance vs baselines
-        print(f"\n📊 Performance vs Baselines:")
-        for opponent, results in best_results.items():
-            if opponent in ['skills', 'overall_strength']:
-                continue
-            print(f"   vs {opponent:15}: {results['win_rate']:5.1%} wins")
-        
-        # Training recommendations
-        print(f"\n🎯 Training Recommendations:")
-        
-        # Check if performance degraded over time
-        if len(checkpoints) > 1:
-            episodes = [ep for _, _, ep in checkpoints]
-            strengths = [all_results[f"Episode {ep}"]['overall_strength'] 
-                        for ep in episodes]
-            
-            final_strength = strengths[-1]
-            max_strength = max(strengths)
-            max_episode = episodes[strengths.index(max_strength)]
-            
-            if max_episode != episodes[-1] and max_strength > final_strength * 1.1:
-                print(f"   ⚠️  Performance peaked at Episode {max_episode}, then declined")
-                print(f"   💡 Consider shorter training (~{max_episode} episodes)")
-                print(f"   💡 Or adjust learning rate/epsilon decay")
-            else:
-                print(f"   ✅ Training progressed well - final agent is strong")
-                print(f"   💡 Could try longer training or different hyperparameters")
-        
-        # Skill-specific recommendations
-        skills = best_results['skills']
-        if skills['tactical'] < 0.3:
-            print(f"   📚 Low tactical skills - try training vs random opponent")
-        if skills['strategic'] < 0.3:
-            print(f"   🧠 Low strategic skills - try self-play training")
-        if skills['multi_move'] < 0.3:
-            print(f"   🎯 Low multi-move skills - try longer lookahead or self-play")
-
+        print()
 
 def main():
-    parser = argparse.ArgumentParser(description="Benchmark trained RL agents")
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints',
-                       help='Directory containing agent checkpoints')
-    parser.add_argument('--games_per_opponent', type=int, default=100,
-                       help='Games to play against each baseline opponent')
-    parser.add_argument('--games_per_matchup', type=int, default=50,
-                       help='Games per matchup in head-to-head tournament')
+    parser = argparse.ArgumentParser(description='Run model matrix benchmark')
+    parser.add_argument('--games', type=int, default=100,
+                       help='Number of games per matchup (default: 100)')
+    parser.add_argument('--weights-dir', type=str, default='./weights',
+                       help='Directory containing model weights (default: ./weights)')
     
     args = parser.parse_args()
     
-    benchmark = BenchmarkSuite(args.checkpoint_dir)
-    benchmark.run_comprehensive_benchmark(
-        games_per_opponent=args.games_per_opponent,
-        games_per_matchup=args.games_per_matchup
-    )
-
+    benchmark = ModelMatrixBenchmark(args.weights_dir)
+    results_matrix, win_counts, all_agents = benchmark.run_matrix_benchmark(args.games)
+    
+    if results_matrix:
+        benchmark.print_results_matrix(results_matrix, win_counts, all_agents)
+    
+    print("\n✅ Matrix benchmark complete!")
 
 if __name__ == "__main__":
     main() 

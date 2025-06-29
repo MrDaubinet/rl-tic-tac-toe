@@ -3,7 +3,7 @@ from typing import List, Tuple
 import os
 import argparse
 from environment import TicTacToeEnv
-from agents.td_learning import TDAgent, LookAheadAgent, LookAheadWithActionValueFunction, RandomAgent
+from agents.td_learning import TDAgent, LookAheadAgent, QLearning, RandomAgent
 from visualization import LearningVisualizer
 from evaluation import evaluate_both_agents, save_agent_checkpoint, load_agent_checkpoint
 
@@ -13,7 +13,7 @@ def get_model(model: str, lookahead_depth: int = 2):
     elif model == 'lookahead':
         return lambda **kwargs: LookAheadAgent(lookahead_depth=lookahead_depth, **kwargs)
     elif model == 'qlearning':
-        return lambda **kwargs: LookAheadWithActionValueFunction(lookahead_depth=lookahead_depth, **kwargs)
+        return lambda **kwargs: QLearning(lookahead_depth=lookahead_depth, **kwargs)
     elif model == 'random':
         return lambda **kwargs: RandomAgent(**kwargs)
     else:
@@ -28,7 +28,10 @@ def train_agents(episodes: int,
                 min_epsilon: float = 0.01,
                 competitor: str = 'random',
                 debug: bool = False,
-                lookahead_depth: int = 2
+                lookahead_depth: int = 2,
+                learning_rate: float = None,
+                discount_factor: float = None,
+                epsilon: float = None
                 ) -> None:
     """
     Train agent(s) for Tic-Tac-Toe. Supports four modes:
@@ -46,10 +49,11 @@ def train_agents(episodes: int,
     X always moves first.
     """
     env = TicTacToeEnv()
+    
     agent_params = {
-        'learning_rate': 0.01,
-        'discount_factor': 0.9,
-        'epsilon': 0.5
+        'learning_rate': learning_rate,
+        'discount_factor': discount_factor,
+        'epsilon': epsilon
     }
     
     # Initialize agents based on competitor type
@@ -68,6 +72,10 @@ def train_agents(episodes: int,
         agent1 = model_factory(**agent_params)
         agent2 = TDAgent(**agent_params)
         print("Using fresh TD agent as competitor")
+    elif competitor == 'lookahead':
+        agent1 = model_factory(**agent_params)
+        agent2 = LookAheadAgent(lookahead_depth=lookahead_depth, **agent_params)
+        print("Using fresh LookAhead agent as competitor")
     else:
         raise ValueError(f"Unknown competitor type: {competitor}")
     
@@ -75,6 +83,7 @@ def train_agents(episodes: int,
     print(f"Agent1 type: {type(agent1).__name__}")
     print(f"Agent2 type: {type(agent2).__name__}")
     print(f"Competitor mode: {competitor}")
+    print(f"Hyperparameters: lr={agent_params['learning_rate']}, γ={agent_params['discount_factor']}, ε={agent_params['epsilon']}")
     if hasattr(agent1, 'lookahead_depth'):
         print(f"Agent1 lookahead depth: {agent1.lookahead_depth}")
     if hasattr(agent2, 'lookahead_depth'):
@@ -123,7 +132,7 @@ def train_agents(episodes: int,
             next_state, reward, done = env.step(action)
             
             # Update agent's history and value function
-            if isinstance(current_agent, (TDAgent, LookAheadAgent, LookAheadWithActionValueFunction)):  # Only update learning agents
+            if isinstance(current_agent, (TDAgent, LookAheadAgent, QLearning)):  # Only update learning agents
                 state_key = current_agent.get_state_key(state)
                 next_state_key = current_agent.get_state_key(next_state)
                 current_agent.add_to_history(state_key, action, reward)
@@ -157,18 +166,18 @@ def train_agents(episodes: int,
                     reward_second = 0.5
                 
                 # End of episode updates for learning agents
-                if isinstance(first_agent, (TDAgent, LookAheadAgent, LookAheadWithActionValueFunction)):
+                if isinstance(first_agent, (TDAgent, LookAheadAgent, QLearning)):
                     first_agent.end_of_episode_update(reward_first)
-                if isinstance(second_agent, (TDAgent, LookAheadAgent, LookAheadWithActionValueFunction)) and competitor != 'selfplay':
+                if isinstance(second_agent, (TDAgent, LookAheadAgent, QLearning)) and competitor != 'selfplay':
                     second_agent.end_of_episode_update(reward_second)
             
             state = next_state
             current_agent = second_agent if current_agent == first_agent else first_agent
         
         # Decay epsilon for learning agents
-        if isinstance(agent1, (TDAgent, LookAheadAgent, LookAheadWithActionValueFunction)):
+        if isinstance(agent1, (TDAgent, LookAheadAgent, QLearning)):
             agent1.decay_epsilon(decay_rate, min_epsilon)
-        if isinstance(agent2, (TDAgent, LookAheadAgent, LookAheadWithActionValueFunction)) and competitor != 'selfplay':
+        if isinstance(agent2, (TDAgent, LookAheadAgent, QLearning)) and competitor != 'selfplay':
             agent2.decay_epsilon(decay_rate, min_epsilon)
         
         # Visualization updates
@@ -229,10 +238,10 @@ def train_agents(episodes: int,
             print("-" * 40)
     
     # Save final results
-    if isinstance(agent1, (TDAgent, LookAheadAgent, LookAheadWithActionValueFunction)):
+    if isinstance(agent1, (TDAgent, LookAheadAgent, QLearning)):
         agent1.save(weights_dir)
         save_agent_checkpoint(agent1, episodes)  # Save final checkpoint
-    if isinstance(agent2, (TDAgent, LookAheadAgent, LookAheadWithActionValueFunction)) and competitor != 'selfplay':
+    if isinstance(agent2, (TDAgent, LookAheadAgent, QLearning)) and competitor != 'selfplay':
         agent2.save(weights_dir)
     
     # Final statistics
@@ -272,12 +281,20 @@ if __name__ == "__main__":
     parser.add_argument('--weights_dir', type=str, default='weights', help='Directory to save agent weights')
     parser.add_argument('--decay_rate', type=float, default=0.9999, help='Epsilon decay rate per episode')
     parser.add_argument('--min_epsilon', type=float, default=0.01, help='Minimum epsilon value')
-    parser.add_argument('--competitor', type=str, choices=['random', 'selfplay', 'independent', 'td'], default='random', 
-                      help='Competitor type: random, selfplay, independent, or td')
+    parser.add_argument('--competitor', type=str, choices=['random', 'selfplay', 'independent', 'td', 'lookahead'], default='random', 
+                      help='Competitor type: random, selfplay, independent, td, or lookahead')
     parser.add_argument('--debug', action='store_true', default=False,
                         help='Enable debug output (epsilon, value function size, agent2 skills)')
     parser.add_argument('--lookahead_depth', type=int, default=2,
                         help='Lookahead depth for LookAhead agent (1-4 recommended)')
+    
+    # Hyperparameter arguments
+    parser.add_argument('--learning_rate', type=float, default=0.01,
+                        help='Learning rate (default: 0.01, recommend 0.1 for qlearning)')
+    parser.add_argument('--discount_factor', type=float, default=0.9,
+                        help='Discount factor (default: 0.9, recommend 0.95 for qlearning)')
+    parser.add_argument('--epsilon', type=float, default=0.5,
+                        help='Initial epsilon for exploration (default: 0.5, recommend 0.9 for qlearning)')
     
     args = parser.parse_args()
     save_subdir = f"{args.save_dir}/{args.model}_{args.competitor}"
@@ -291,5 +308,8 @@ if __name__ == "__main__":
         min_epsilon=args.min_epsilon,
         competitor=args.competitor,
         debug=args.debug,
-        lookahead_depth=args.lookahead_depth
+        lookahead_depth=args.lookahead_depth,
+        learning_rate=args.learning_rate,
+        discount_factor=args.discount_factor,
+        epsilon=args.epsilon
     ) 

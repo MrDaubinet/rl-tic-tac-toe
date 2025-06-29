@@ -308,22 +308,27 @@ class LookAheadAgent(TDAgent):
         if reward != 0:
             self.value_function[next_state_key] = reward
 
-class LookAheadWithActionValueFunction(LookAheadAgent):
+class QLearning(Agent):
     """
-    Q-Learning agent with minimax lookahead that maintains action-value function Q(s,a).
-    Combines the strategic depth of minimax with the learning power of Q-values.
+    Pure Q-Learning agent that maintains action-value function Q(s,a).
+    Learns the value of each action in each state through experience.
     """
     def __init__(self, learning_rate: float = 0.01, discount_factor: float = 0.9, 
                  epsilon: float = 0.5, lookahead_depth: int = 2):
-        super().__init__(learning_rate, discount_factor, epsilon, lookahead_depth)
+        super().__init__(learning_rate, discount_factor, epsilon)
         self.action_value_function: Dict[Tuple[str, int], float] = {}
-        self.last_state_action = None  # Track (state, action) for updates
+        self.previous_state_action = None  # Track (state, action) for Q-learning updates
+        
+    def reset_episode(self):
+        """Reset episode-specific tracking."""
+        super().reset_episode()
+        self.previous_state_action = None
 
     def get_action_value(self, state_key: str, action: int) -> float:
-        """Get Q-value for state-action pair. Initialize optimistically if not seen."""
+        """Get Q-value for state-action pair. Initialize optimistically."""
         key = (state_key, action)
         if key not in self.action_value_function:
-            self.action_value_function[key] = 0.1  # Optimistic initialization
+            self.action_value_function[key] = 0.2  # Optimistic initialization
         return self.action_value_function[key]
 
     def get_max_action_value(self, state_key: str, valid_actions: List[int]) -> float:
@@ -332,138 +337,62 @@ class LookAheadWithActionValueFunction(LookAheadAgent):
             return 0.0
         return max(self.get_action_value(state_key, action) for action in valid_actions)
 
-    def minimax_with_qvalues(self, board: List[str], depth: int, is_maximizing: bool, 
-                            alpha: float = float('-inf'), beta: float = float('inf')) -> float:
-        """
-        Enhanced minimax that uses Q-values at leaf nodes instead of state values.
-        """
-        # Check for terminal state
-        terminal_value = self.evaluate_terminal_state(board)
-        if terminal_value is not None:
-            return terminal_value
-
-        # If we've reached max depth, use learned Q-values
-        if depth == 0:
-            state_key = self.get_state_key(board)
-            valid_moves = self.get_valid_moves(board)
-            
-            if is_maximizing:
-                # Our turn - return max Q-value
-                return self.get_max_action_value(state_key, valid_moves)
-            else:
-                # Opponent's turn - return negative of their best Q-value
-                # We assume opponent also tries to maximize their Q-values
-                return -self.get_max_action_value(state_key, valid_moves)
-
-        valid_moves = self.get_valid_moves(board)
-        if not valid_moves:
-            return 0.0
-
-        if is_maximizing:
-            # Our turn - maximize value
-            max_eval = float('-inf')
-            current_role = self.role
-            
-            for move in valid_moves:
-                new_board = board.copy()
-                new_board[move] = current_role
-                
-                eval_score = self.minimax_with_qvalues(new_board, depth - 1, False, alpha, beta)
-                max_eval = max(max_eval, eval_score)
-                alpha = max(alpha, eval_score)
-                
-                if beta <= alpha:
-                    break  # Alpha-beta pruning
-                    
-            return max_eval
-        else:
-            # Opponent's turn - minimize our value
-            min_eval = float('inf')
-            opponent_role = 'O' if self.role == 'X' else 'X'
-            
-            for move in valid_moves:
-                new_board = board.copy()
-                new_board[move] = opponent_role
-                
-                eval_score = self.minimax_with_qvalues(new_board, depth - 1, True, alpha, beta)
-                min_eval = min(min_eval, eval_score)
-                beta = min(beta, eval_score)
-                
-                if beta <= alpha:
-                    break  # Alpha-beta pruning
-                    
-            return min_eval
-
     def choose_action(self, board: List[str], evaluation_mode: bool = False) -> int:
         """
-        Choose action using combination of Q-values and minimax lookahead.
+        Choose action using pure Q-learning (epsilon-greedy).
+        Store the state-action pair for future Q-learning updates.
         """
         valid_moves = self.get_valid_moves(board)
         if not valid_moves:
             return -1
             
+        state_key = self.get_state_key(board)
+        
         # Epsilon-greedy exploration (except in evaluation mode)
         if not evaluation_mode and random.random() < self.epsilon:
-            return random.choice(valid_moves)
+            action = random.choice(valid_moves)
+        else:
+            # Choose action with highest Q-value
+            best_value = float('-inf')
+            best_moves = []
+            
+            for move in valid_moves:
+                q_value = self.get_action_value(state_key, move)
+                
+                if q_value > best_value:
+                    best_value = q_value
+                    best_moves = [move]
+                elif q_value == best_value:
+                    best_moves.append(move)
+            
+            action = random.choice(best_moves)
         
-        state_key = self.get_state_key(board)
-        best_value = float('-inf')
-        best_moves = []
-        
-        # Evaluate each possible move using minimax + Q-values
-        for move in valid_moves:
-            # Make the move
-            new_board = board.copy()
-            new_board[move] = self.role
-            
-            # Combine Q-value with minimax lookahead
-            q_value = self.get_action_value(state_key, move)
-            
-            # Use minimax to evaluate the resulting position
-            minimax_value = self.minimax_with_qvalues(new_board, self.lookahead_depth - 1, False)
-            
-            # Weighted combination of Q-value and minimax (favor minimax for deeper search)
-            combined_value = 0.3 * q_value + 0.7 * minimax_value
-            
-            if combined_value > best_value:
-                best_value = combined_value
-                best_moves = [move]
-            elif combined_value == best_value:
-                best_moves.append(move)
-        
-        return random.choice(best_moves)
+        # Store state-action for Q-learning update
+        self.previous_state_action = (state_key, action)
+        return action
 
     def update(self, state_key: str, next_state_key: str, reward: float):
         """
         Q-learning update: Q(s,a) = Q(s,a) + α[r + γ max Q(s',a') - Q(s,a)]
+        Updates the Q-value for the PREVIOUS state-action pair that led to current state.
         """
-        # We need the action that was taken to get from state to next_state
-        # This should be stored from the last choose_action call
-        if self.last_state_action is None:
-            return  # Can't update without knowing the action
+        if self.previous_state_action is None:
+            return  # No previous action to update
             
-        last_state, last_action = self.last_state_action
-        if last_state != state_key:
-            return  # State mismatch
-            
-        current_q_value = self.get_action_value(state_key, last_action)
+        prev_state, prev_action = self.previous_state_action
+        current_q_value = self.get_action_value(prev_state, prev_action)
         
-        # For terminal states, next Q-value is just the reward
-        if reward != 0:  # Terminal state
-            next_max_q = reward
-        else:  # Non-terminal state
+        # Calculate target Q-value
+        if reward != 0:  # Terminal state - no future rewards
+            target_q = reward
+        else:  # Non-terminal state - add discounted future value
             next_valid_moves = self.get_valid_moves(self._board_from_state_key(next_state_key))
             next_max_q = self.get_max_action_value(next_state_key, next_valid_moves)
+            target_q = reward + self.discount_factor * next_max_q
         
         # Q-learning update
-        new_q_value = current_q_value + self.learning_rate * (
-            reward + self.discount_factor * next_max_q - current_q_value
-        )
-        
-        self.action_value_function[(state_key, last_action)] = np.clip(new_q_value, -1.0, 1.0)
-        
-        # Clear the last state-action for next update
-        self.last_state_action = None
+        new_q_value = current_q_value + self.learning_rate * (target_q - current_q_value)
+        self.action_value_function[(prev_state, prev_action)] = np.clip(new_q_value, -1.0, 1.0)
 
     def _board_from_state_key(self, state_key: str) -> List[str]:
         """Convert state key back to board representation."""
@@ -474,23 +403,20 @@ class LookAheadWithActionValueFunction(LookAheadAgent):
             board_str = state_key
         return list(board_str)
 
-    def add_to_history(self, state: str, action: int, reward: float):
-        """Override to track state-action pairs for Q-learning."""
-        super().add_to_history(state, action, reward)
-        self.last_state_action = (state, action)
-
     def end_of_episode_update(self, final_reward: float):
         """
-        Update Q-value for terminal state-action pair.
+        Final Q-value update for the last action taken in the episode.
         """
-        if self.last_state_action is not None:
-            state, action = self.last_state_action
-            # For terminal states, Q(s,a) = reward
-            self.action_value_function[(state, action)] = final_reward
-            self.last_state_action = None
+        if self.previous_state_action is not None:
+            state, action = self.previous_state_action
+            current_q = self.get_action_value(state, action)
+            # For terminal states, target Q-value is just the final reward
+            new_q = current_q + self.learning_rate * (final_reward - current_q)
+            self.action_value_function[(state, action)] = np.clip(new_q, -1.0, 1.0)
+            self.previous_state_action = None
 
     def save(self, directory: str = 'weights', filename: str = None):
-        """Save both Q-values and any remaining state values."""
+        """Save Q-values."""
         import os
         import json
         
@@ -502,11 +428,31 @@ class LookAheadWithActionValueFunction(LookAheadAgent):
         q_values_serializable = {f"{state}|{action}": value 
                                for (state, action), value in self.action_value_function.items()}
         
-        save_data = {
-            'action_value_function': q_values_serializable,
-            'value_function': self.value_function  # Keep any state values too
-        }
-        
         path = os.path.join(directory, filename)
         with open(path, 'w') as f:
-            json.dump(save_data, f)
+            json.dump(q_values_serializable, f)
+
+    def load(self, directory: str = 'weights', filename: str = None):
+        """Load Q-values."""
+        import os
+        import json
+        
+        if filename is None:
+            filename = f'{self.__class__.__name__}_{self.role}.json'
+        
+        path = os.path.join(directory, filename)
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                data = json.load(f)
+            
+            # Handle both old and new formats
+            if isinstance(data, dict) and 'action_value_function' in data:
+                q_values_data = data['action_value_function']
+            else:
+                q_values_data = data
+            
+            # Convert string keys back to tuples
+            for key, value in q_values_data.items():
+                if '|' in key:
+                    state, action = key.split('|', 1)
+                    self.action_value_function[(state, int(action))] = value
