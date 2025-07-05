@@ -1,38 +1,40 @@
-# sv
+# Tic Tac Toe RL Web App
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+This is a modern SvelteKit frontend for playing Tic Tac Toe against reinforcement learning agents trained with Temporal Difference (TD), Q-Learning, and MinMaxTD algorithms.
 
-## Creating a project
+## Features
+- Play against different RL agents (TD, QLearning, MinMaxTD)
+- Switch agent type and agent role (X or O) in the settings panel
+- Visualize the agent's value function for each possible move
+- Responsive, accessible UI with game history, undo, and reset
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Getting Started
 
+### 1. Install dependencies
 ```bash
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
+cd web-app
+npm install
 ```
 
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
+### 2. Run the development server
 ```bash
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
+- The app will be available at `http://localhost:5173` (or as indicated in the terminal).
 
-## Building
+### 3. Switch agents and settings
+- Click the settings button (top right) to open the settings panel.
+- Choose the agent type (TD, QLearning, MinMaxTD) and which player is controlled by the agent (X or O).
+- Toggle value function display to see the agent's evaluation for each possible move.
 
-To create a production version of your app:
+### 4. Play
+- Click on the board to make your move. The agent will respond automatically if enabled.
+- Use the reset button to start a new game.
+- View game history and undo moves as needed.
 
-```bash
-npm run build
-```
+## Notes
+- Agent weights are loaded from the `static/` directory. Make sure the corresponding `.json` files are present for each agent type and role.
+- For best results, use agents trained with sufficient episodes and lookahead depth (see the main project README for training details).
 
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+---
+For backend training and more details, see the main `reinforcement-learning/README.md`.

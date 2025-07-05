@@ -16,9 +16,9 @@ function createGameStore() {
   const show_notification = writable(false);
   const agentLoading = writable(false);
   const agentPlayer = writable<'X' | 'O'>('O');
-  const agentType = writable<AgentType>('TDAgent');
+  const agentType = writable<AgentType>('MinMaxTDAgent');
   const showHistory = writable(false);
-  const showValueFunction = writable(true);
+  const showValueFunction = writable(false);
 
   const availableAgentTypes = AgentFactory.getAvailableAgentTypes();
 

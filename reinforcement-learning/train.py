@@ -43,7 +43,7 @@ def train_agents(episodes: int,
     3. Two separate agents: Different agents play against each other
     4. TD agent competitor: Agent plays against a TD learning agent
     
-    For LookAhead agents, lookahead_depth controls minimax search depth:
+    For MinMaxTD agents, lookahead_depth controls minimax search depth:
     - Depth 1: Only considers immediate moves
     - Depth 2: Considers opponent's best response (default)
     - Depth 3+: Deeper search (slower but potentially stronger)
@@ -71,14 +71,17 @@ def train_agents(episodes: int,
     elif competitor == 'independent':
         agent1 = model_factory(**agent_params)
         agent2 = model_factory(**agent_params)
+        # Always assign roles: agent1 is X, agent2 is O
+        agent1.set_role('X')
+        agent2.set_role('O')
     elif competitor == 'td':
         agent1 = model_factory(**agent_params)
         agent2 = TDAgent(**agent_params)
         print("Using fresh TD agent as competitor")
-    elif competitor == 'lookahead':
+    elif competitor == 'minmax':
         agent1 = model_factory(**agent_params)
-        agent2 = LookAheadAgent(lookahead_depth=lookahead_depth, **agent_params)
-        print("Using fresh LookAhead agent as competitor")
+        agent2 = MinMaxTDAgent(lookahead_depth=lookahead_depth, **agent_params)
+        print("Using fresh MinMaxTD agent as competitor")
     else:
         raise ValueError(f"Unknown competitor type: {competitor}")
     
@@ -88,9 +91,9 @@ def train_agents(episodes: int,
     print(f"Competitor mode: {competitor}")
     print(f"Hyperparameters: lr={agent_params['learning_rate']}, γ={agent_params['discount_factor']}, ε={agent_params['epsilon']}")
     if hasattr(agent1, 'lookahead_depth'):
-        print(f"Agent1 lookahead depth: {agent1.lookahead_depth}")
+        print(f"Agent1 MinMax depth: {agent1.lookahead_depth}")
     if hasattr(agent2, 'lookahead_depth'):
-        print(f"Agent2 lookahead depth: {agent2.lookahead_depth}")
+        print(f"Agent2 MinMax depth: {agent2.lookahead_depth}")
     print("-" * 40)
     
     visualizer = LearningVisualizer()
@@ -107,16 +110,20 @@ def train_agents(episodes: int,
     wins_as_O = 0  # Track O wins regardless of agent
 
     for episode in range(1, episodes + 1):
-        # Randomly assign roles (X always moves first)
-        agent1_is_X = np.random.random() < 0.5
-        if agent1_is_X:
+        # Assign roles for each episode
+        if competitor == 'independent':
             first_agent, second_agent = agent1, agent2
-            agent1.set_role('X')
-            agent2.set_role('O')
         else:
-            first_agent, second_agent = agent2, agent1
-            agent2.set_role('X')
-            agent1.set_role('O')
+            # Randomly assign roles (X always moves first)
+            agent1_is_X = np.random.random() < 0.5
+            if agent1_is_X:
+                first_agent, second_agent = agent1, agent2
+                agent1.set_role('X')
+                agent2.set_role('O')
+            else:
+                first_agent, second_agent = agent2, agent1
+                agent2.set_role('X')
+                agent1.set_role('O')
         
         state = env.reset()
         first_agent.reset_episode()
@@ -148,10 +155,16 @@ def train_agents(episodes: int,
                     winner_role = env.current_player  # This is who just won
                     
                     # Track which agent won based on their roles
-                    if (agent1_is_X and winner_role == 'X') or (not agent1_is_X and winner_role == 'O'):
-                        wins_agent1 += 1
+                    if competitor == 'independent':
+                        if winner_role == 'X':
+                            wins_agent1 += 1
+                        else:
+                            wins_agent2 += 1
                     else:
-                        wins_agent2 += 1
+                        if (agent1_is_X and winner_role == 'X') or (not agent1_is_X and winner_role == 'O'):
+                            wins_agent1 += 1
+                        else:
+                            wins_agent2 += 1
                     
                     # Track X vs O wins for debugging
                     if winner_role == 'X':
@@ -190,14 +203,17 @@ def train_agents(episodes: int,
             draw_rate = draws / total_games
             
             # Map first/second player rewards to agent1/agent2 rewards
-            if agent1_is_X:
-                # agent1 is X (first), agent2 is O (second)
+            if competitor == 'independent':
+                # agent1 is always X, agent2 is always O
                 reward_agent1 = reward_first
                 reward_agent2 = reward_second
             else:
-                # agent2 is X (first), agent1 is O (second)
-                reward_agent1 = reward_second
-                reward_agent2 = reward_first
+                if agent1_is_X:
+                    reward_agent1 = reward_first
+                    reward_agent2 = reward_second
+                else:
+                    reward_agent1 = reward_second
+                    reward_agent2 = reward_first
             
             visualizer.update_win_rates(episode, win_rate1, win_rate2)
             visualizer.update_rewards_both(episode, reward_agent1, reward_agent2)
@@ -284,12 +300,12 @@ if __name__ == "__main__":
     parser.add_argument('--weights_dir', type=str, default='weights', help='Directory to save agent weights')
     parser.add_argument('--decay_rate', type=float, default=0.9999, help='Epsilon decay rate per episode')
     parser.add_argument('--min_epsilon', type=float, default=0.01, help='Minimum epsilon value')
-    parser.add_argument('--competitor', type=str, choices=['random', 'selfplay', 'independent', 'td', 'lookahead'], default='random', 
-                      help='Competitor type: random, selfplay, independent, td, or lookahead')
+    parser.add_argument('--competitor', type=str, choices=['random', 'selfplay', 'independent', 'td', 'minmax'], default='random', 
+                      help='Competitor type: random, selfplay, independent, td, or minmax')
     parser.add_argument('--debug', action='store_true', default=False,
                         help='Enable debug output (epsilon, value function size, agent2 skills)')
     parser.add_argument('--lookahead_depth', type=int, default=2,
-                        help='Lookahead depth for LookAhead agent (1-4 recommended)')
+                        help='MinMax depth for MinMaxTD agent (1-4 recommended)')
     
     # Hyperparameter arguments
     parser.add_argument('--learning_rate', type=float, default=0.2,

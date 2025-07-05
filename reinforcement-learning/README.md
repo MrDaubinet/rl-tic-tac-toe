@@ -1,28 +1,32 @@
-# Reinforcement Learning Visualization Module
+# Reinforcement Learning Visualization & Tic-Tac-Toe Agents
 
 ## Algorithms
 
-1. Temporal Difference Learning: is a method of learning from experience to predict future rewards. It is a combination of Monte Carlo methods and Dynamic Programming.
-
-2. Value based: Q-learning is a value based algorithm that uses a Q-table to store the value of each action in each state. The agent uses the Q-table to choose the best action to take in each state.
-
-3. Policy based: PPO is a policy based algorithm that uses a neural network to approximate the policy function. The agent uses the neural network to choose the best action to take in each state.
+1. **Temporal Difference Learning (TD):** Learns from experience to predict future rewards, combining Monte Carlo and Dynamic Programming methods.
+2. **Value-based (Q-learning):** Uses a Q-table to store the value of each action in each state. The agent uses the Q-table to choose the best action to take in each state.
+3. **MinMaxTD Agent:** Combines TD learning with minimax lookahead search for stronger play. Lookahead depth is configurable.
+4. **Random Agent:** Selects moves randomly (for benchmarking and as a baseline).
 
 ## Overview
-This module provides comprehensive visualization tools for tracking and analyzing the performance of reinforcement learning algorithms, specifically designed for the Tic-Tac-Toe learning environment. It offers intuitive visualizations of learning progress, win rates, rewards, and value functions.
+This module provides comprehensive tools for training, evaluating, and visualizing reinforcement learning agents for Tic-Tac-Toe. It includes:
+- Python backend for agent training and evaluation
+- SvelteKit web app frontend for interactive play and value function visualization
 
 ## Key Features
 - Real-time tracking of learning metrics
 - Interactive learning curve plots
 - Value function heatmap visualization
 - Customizable plot styling and saving options
-- Clear and intuitive API
+- Modern, responsive web UI with agent settings and value function overlays
+- Play against trained agents directly in the browser
+- Toggle between agent types, player roles, and value function display
 
 ## Dependencies
 - Python 3.7+
 - NumPy (>=1.21.0)
 - Matplotlib (>=3.4.0)
 - Seaborn (>=0.11.0)
+- SvelteKit (for frontend)
 
 ## Installation
 1. Clone this repository:
@@ -37,7 +41,7 @@ pip install -r requirements.txt
 ```
 
 ## Usage
-### Basic Example
+### Basic Example (Python)
 ```python
 from visualization import LearningVisualizer
 
@@ -56,6 +60,16 @@ board_state = [0, 1, -1, 0, 0, 0, 1, -1, 0]  # Example board state
 visualizer.plot_value_function_heatmap(board_state, save_path='value_function.png')
 ```
 
+### Web App (SvelteKit)
+- Run the web app in `web-app/` to play against trained agents, visualize value functions, and adjust agent settings interactively.
+- Features include:
+  - Value function overlay for each possible move
+  - Toggle agent type (TD, QLearning, MinMaxTD)
+  - Choose agent role (X or O)
+  - Responsive, accessible UI
+  - Game history and undo
+  - Reset and settings panel
+
 ## Types of Visualizations
 
 ### 1. Learning Curves
@@ -70,6 +84,31 @@ visualizer.plot_value_function_heatmap(board_state, save_path='value_function.pn
 - Intuitive interpretation of learned strategies
 - Support for any valid board state
 
-## Types of agents implemented
+## Types of Agents Implemented
+- TDAgent (Temporal Difference)
+- MinMaxTDAgent (TD + Minimax lookahead)
+- QLearning Agent
+- Random Agent
+
+## Training Options
+- **Self-play:** Agent plays against itself
+- **Random opponent:** Agent plays against random moves
+- **Independent:** Two separate agents (X and O) learn independently
+- **TD/MinMax competitor:** Agent plays against a fresh TD or MinMaxTD agent
+- **Lookahead depth:** For MinMaxTDAgent, controls how many moves ahead are considered (higher = stronger, slower)
+
+## Best Agent
+
+**My best agent was trained with the following command:**
+
+```bash
+python train.py --model minmaxtd --competitor independent --episodes 50000 --learning_rate 0.5 --discount_factor 0.9 --epsilon 0.9 --decay_rate 0.999 --min_epsilon 0.01 --lookahead_depth 3
+```
+
+- This agent uses MinMaxTD with a lookahead depth of 3, high initial exploration, and independent training for X and O.
+- It is robust against most human strategies and can block multi-move traps (like the double-corner fork).
+
+---
+For more details, see the code and comments in each module.
 
 
