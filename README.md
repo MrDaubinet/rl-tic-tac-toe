@@ -60,39 +60,14 @@ The training process generates several visualizations to track agent performance
 Example visualization output:
 * `learning_curves_{episode}.png`: Win rates and rewards over time
 * `accuracy_curve_{episode}.png`: Performance on test cases
-* `value_heatmap_{episode}.png`: Value function visualization
-* `policy_heatmap_{episode}.png`: Action preferences
-* `value_distribution_{episode}.png`: Distribution of state values
 
-# Testing
-Svelte.js, Sapper.js, tailwind.css, Firebase Hosting
+## Subdirectory Documentation
 
-## How to run
+- For **agent logic, training scripts, and RL details**, see [reinforcement-learning/README.md](reinforcement-learning/README.md)
+- For **frontend usage, running the web app, and UI features**, see [web-app/README.md](web-app/README.md)
 
-Install dependencies:
-```
-npm install
-```
+## Checkout the Readme's
 
-Run the app:
-```
-npm run dev
-```
-
-## Technologies
-Svelte.js, tailwind.css, Firebase Hosting
-
-## How to run
-
-Install dependencies:
-```
-npm install
-```
-
-Run the app:
-```
-npm run dev
-```
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
