@@ -23,7 +23,9 @@ function createGameStore() {
   const availableAgentTypes = AgentFactory.getAvailableAgentTypes();
 
   // Non-reactive
-  let agent: BaseAgent | null = null;
+  let agentX: BaseAgent | null = null;
+  let agentO: BaseAgent | null = null;
+  let agent: BaseAgent | null = null; // The agent that plays (O or X)
   let timeoutId: number | null = null;
 
   // Methods
@@ -127,12 +129,15 @@ function createGameStore() {
 
   async function loadAgent() {
     const $agentType = get(agentType);
-    const $agentPlayer = get(agentPlayer);
     agentLoading.set(true);
     try {
-      agent = await AgentFactory.loadAgent($agentType, $agentPlayer);
+      agentX = await AgentFactory.loadAgent($agentType, 'X');
+      agentO = await AgentFactory.loadAgent($agentType, 'O');
+      // The agent that plays (for moves) is still based on agentPlayer
+      const $agentPlayer = get(agentPlayer);
+      agent = $agentPlayer === 'X' ? agentX : agentO;
       game.playAgent();
-      showNotification(`${$agentType} ${$agentPlayer} Loaded!`);
+      showNotification(`${$agentType} loaded!`);
       await reset(0);
     } catch {
       showNotification('Failed to Load Agent');
@@ -169,29 +174,29 @@ function createGameStore() {
   }
 
   function getValueForCell(index: number): number | null {
-    if (!agent) return null;
+    const $turn = get(turn);
+    // Use the value function for the player whose turn it is
+    const vfAgent = $turn ? agentX : agentO;
+    if (!vfAgent) return null;
     const currentState = game.getStates();
     if (currentState[index] !== 0) return null;
-    const $turn = get(turn);
     const player = $turn ? 1 : 2;
     const nextState = [...currentState];
     nextState[index] = player;
 
     // Type guards
     const isTDAgent = (a: any): a is { getValue: (stateKey: string) => number, getStateKey: (state: number[]) => string } =>
-      typeof a.getValue === 'function' && typeof a.getStateKey === 'function' && a.constructor.name === 'TDAgent';
-    const isMinMaxTDAgent = (a: any): a is { getValue: (stateKey: string) => number, getStateKey: (state: number[]) => string } =>
-      typeof a.getValue === 'function' && typeof a.getStateKey === 'function' && a.constructor.name === 'MinMaxTDAgent';
+      typeof a.getValue === 'function' && typeof a.getStateKey === 'function' && (a.constructor.name === 'TDAgent' || a.constructor.name === 'MinMaxTDAgent');
     const isQLearningAgent = (a: any): a is { getActionValue: (stateKey: string, action: number) => number, getStateKey: (state: number[]) => string } =>
       typeof a.getActionValue === 'function' && typeof a.getStateKey === 'function';
 
     try {
-      if (isTDAgent(agent) || isMinMaxTDAgent(agent)) {
-        const stateKey = agent.getStateKey(nextState);
-        return agent.getValue(stateKey);
-      } else if (isQLearningAgent(agent)) {
-        const stateKey = agent.getStateKey(currentState);
-        return agent.getActionValue(stateKey, index);
+      if (isTDAgent(vfAgent)) {
+        const stateKey = vfAgent.getStateKey(nextState);
+        return vfAgent.getValue(stateKey);
+      } else if (isQLearningAgent(vfAgent)) {
+        const stateKey = vfAgent.getStateKey(currentState);
+        return vfAgent.getActionValue(stateKey, index);
       }
       return null;
     } catch {

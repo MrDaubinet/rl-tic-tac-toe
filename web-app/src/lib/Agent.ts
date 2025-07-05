@@ -14,8 +14,7 @@ export abstract class Agent implements BaseAgent {
 
   // Convert board array to string key (match Python format)
   getStateKey(board: number[]): string {
-    const boardStr = board.map(v => v === 0 ? '-' : (v === 1 ? 'X' : 'O')).join('');
-    return `${this.player}:${boardStr}`;
+    return board.map(v => v === 0 ? '-' : (v === 1 ? 'X' : 'O')).join('');
   }
 
   // Get valid moves

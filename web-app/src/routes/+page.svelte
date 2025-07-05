@@ -57,6 +57,11 @@
 	function toggleShowValueFunction(val: boolean) {
 		showValueFunction.set(val);
 	}
+
+	// Reactive statement to call loadAgent when agentType or agentPlayer changes
+	$: if ($agentType && $agentPlayer) {
+		gameStore.loadAgent();
+	}
 </script>
 
 <!-- Notification -->
@@ -93,6 +98,14 @@
 			</div>
 			<div class="text-center mt-8">
 				<Score score={$score} agent_play={$agent_play} />
+			</div>
+			<div class="flex justify-center mt-6">
+				<button
+					class="px-6 py-2 text-4xl text-white font-semibold transition hover:text-gray-300"
+					on:click={() => gameStore.reset(0)}
+				>
+					Reset Game
+				</button>
 			</div>
 		</div>
 		
