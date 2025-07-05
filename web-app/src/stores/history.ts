@@ -1,18 +1,23 @@
 import { writable } from 'svelte/store';
 
-const history = []
+interface GameState {
+  state: number[];
+  turn: boolean;
+}
 
-const { subscribe, set, update } = writable([]);
+const history: GameState[] = []
 
-const addState = step => update(history => {
+const { subscribe, set, update } = writable<GameState[]>([]);
+
+const addState = (step: GameState) => update(history => {
   return [...history, Object.assign({}, step)]
 })
 
 const resetState = () => {
-  set(history);
+  set([]);
 };
 
-const selectState = index => update(history => {
+const selectState = (index: number) => update(history => {
   return [...history.slice(0, index+1)];
 })
 

@@ -5,7 +5,7 @@
 </script>
 
 <div class="h-full rounded min-w-md">
-  <div class="flex justify-between text-3xl text-white">
+  <div class="flex justify-between text-lg md:text-3xl text-white">
     <div class="{turn == 1 ? 'animate-pulse': ''}">
       <span class="ml-2">
         {#if agent_play}

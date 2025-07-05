@@ -1,155 +1,138 @@
-<script>
-	// libraries
-	import { tick } from 'svelte';
+<script lang="ts">
 	import { onMount } from 'svelte';
-	// Components
 	import Board from "../components/Board.svelte"
 	import Score from "../components/Score.svelte"
 	import Turn from "../components/Turn.svelte"
 	import History from "../components/History.svelte"
 	import Notification from "../components/Notification.svelte"
-	// js class
-	import { game } from "../game.js"
-	// store
-	import history from "../stores/history"
+	import { gameStore } from '../lib/GameController';
+	import SettingsButton from '../components/SettingsButton.svelte';
+	import Settings from '../components/Settings.svelte';
+	import { derived } from 'svelte/store';
+	import { get } from 'svelte/store';
 
-	// Display states
-	let showHistory = false
-	
-	// game states
-	let score = game.getScore()
-	let agent_play = false
-	let outcome = null
-	let state
-	let turn
+	// Destructure the stores
+	const {
+		agentType,
+		agent_play,
+		agentPlayer,
+		showHistory,
+		show_notification,
+		notification,
+		turn,
+		state,
+		score,
+		agentLoading,
+		showValueFunction,
+		getValueForCell,
+	} = gameStore;
+	const availableAgentTypes = gameStore.availableAgentTypes;
 
-	// notification states
-	let notification 
-	let show_notificaiton = false
+	let showSettings = false;
 
-	// life Cycle events
-	onMount(async () => {
-		history.addState({state: [...game.getStates()], turn: game.getTurn()})
-		await tick
-		updateState()
+	// Compute the value for each cell reactively
+	const cellValues = derived(
+		[state, turn, agentLoading, showValueFunction],
+		([$state, $turn, $agentLoading, $showValueFunction]) => {
+			if ($agentLoading || !$showValueFunction) return Array(9).fill(null);
+			return $state.map((v, i) => getValueForCell(i));
+		}
+	);
+
+	onMount(() => {
+		gameStore.updateState();
+		gameStore.loadAgent();
 	});
 
-	// Add to hisory and update board state / turn
-	async function updateState() {
-		state = $history[$history.length - 1].state
-		turn = $history[$history.length - 1].turn
+	function handleShowSettings(val: boolean) {
+		showSettings = val;
+		if (val) showHistory.set(false);
 	}
 
-	/* Event triggered by selecting a move */
-	async function selectMarker(index) {
-		outcome = game.updateState(index)
-		score = game.getScore()
-		if(outcome == 'win') {
-			history.addState({state: [...game.getStates()], turn: game.getTurn()})
-			await tick
-			updateState()
-			showNotification(winnerInfo(game.getWinner()))
-			reset()
-		} else if(outcome == 'tie') {
-			showNotification('Tie')
-			reset()
-		} else if(outcome == 'invalid') {
-			showNotification('Impossible Move')
-		} else {
-			history.addState({state: [...game.getStates()], turn: game.getTurn()})
-			await tick
-			updateState()
-		}
-  }
-	
-	/* display given text as a notification for 2 seconds */
-	function showNotification(new_notification) {
-		notification = new_notification
-		show_notificaiton = true
-		clearTimeout()
-		setTimeout(function(){ show_notificaiton = false; }, 2000);
+	function handleShowHistory(val: boolean) {
+		showHistory.set(val);
+		if (val) showSettings = false;
 	}
 
-	/* helper function -> format win message */
-	function winnerInfo(winner){
-		if(winner == 1) 
-			return 'Player 1 Wins'
-		else {
-			if(game.agentPlaying()) 
-				return 'Agent Wins'
-			else
-				return 'Player 2 Wins'
-		}
-	}
-
-	/* Reset the game state */
-	async function reset(timeout=1500){
-		clearTimeout()
-		setTimeout(async function(){ 
-			game.reset()
-			history.resetState()
-			history.addState({state: [...game.getStates()], turn: game.getTurn()})
-			await tick
-			updateState()
-		}, timeout);
+	function toggleShowValueFunction(val: boolean) {
+		showValueFunction.set(val);
 	}
 </script>
 
-<div class="h-screen">
-	<!-- notification -->
-	{#if show_notificaiton}
-		<Notification>{notification}</Notification>
-	{/if}
-	<div 
-		class="place-content-center grid mt-20 
-			{showHistory ? 'grid-rows-2 grid-cols-none lg:grid-cols-2 lg:grid-rows-none' : 'grid-rows-none grid-cols-none' }
-		">
-		<div class="px-10 min-w-lg"> 
-			<!-- title -->
-			<h1 class="pt-10 text-6xl text-center sm:pt-0">Tic-Tac-Toe</h1>
-			<div class="py-10">
-				<Turn 
-					{turn}
-					{agent_play}
+<!-- Notification -->
+{#if $show_notification}
+	<Notification
+	message={$notification}
+	onClose={() => show_notification.set(false)}
+	/>
+{/if}
+
+<div class="fixed top-2 right-2 z-50">
+	<SettingsButton onClick={() => handleShowSettings(!showSettings)} />
+</div>
+
+<div class="max-w-4xl mx-auto px-4 py-8">
+	<div class="text-center mb-8">
+		<h1 class="text-2xl md:text-4xl font-bold mb-2">Tic Tac Toe</h1>
+		<p class="text-gray-400 text-sm md:text-base">Play against AI agents trained with reinforcement learning</p>
+	</div>
+
+	<!-- Responsive grid: 1 col, 2 col, or 3 col depending on settings/history -->
+	<div class="grid grid-cols-1 {(showSettings || $showHistory) ? 'md:grid-cols-2' : ''}">
+		<div class="mt-4 mb-8">
+			<div class="text-center">
+				<Turn turn={$turn} agent_play={$agent_play} />
+			</div>
+			
+			<div class="flex justify-center mt-4">
+				<Board
+					state={$state}
+					selectMarker={(i: number) => gameStore.selectMarker(i)}
+					cellValues={$cellValues}
 				/>
 			</div>
-			<Board 
-				state={state}
-				{selectMarker}
-			/>
-			<!-- score -->
-			<div class="py-10">
-				<Score 
-					{score}
-					{agent_play}
-				/>
-			</div>
-			<div class="flex justify-center py-5">
-				<span class="inline-flex mr-5 rounded-md shadow-sm">
-					<button on:click={()=>reset(0)} class="text-4xl cursor-pointer focus:outline-none hover:text-gray-300">
-						Reset
-					</button>
-				</span>
-				<span class="inline-flex rounded-md shadow-sm">
-					<button on:click={()=>showHistory = !showHistory} class="text-4xl cursor-pointer focus:outline-none hover:text-gray-300">
-						{#if showHistory}
-							Hide History
-						{:else}
-							Show History
-						{/if}
-					</button>
-				</span>
+			<div class="text-center mt-8">
+				<Score score={$score} agent_play={$agent_play} />
 			</div>
 		</div>
-		{#if showHistory}
-			<div class="px-10 min-w-lg">
-				<h1 class="pt-10 text-6xl text-center sm:pt-0">History</h1>
-				<div class="py-10">
-					<History 
-						{updateState}
-					/> 
-				</div>
+		
+		{#if showSettings}
+			<div class="px-4 lg:px-10">
+				<Settings
+					agentType={$agentType}
+					agentPlayer={$agentPlayer}
+					availableAgentTypes={availableAgentTypes}
+					onAgentTypeChange={(type) => agentType.set(type as typeof $agentType)}
+					onAgentPlayerChange={(player) => {
+						agentPlayer.set(player);
+						// Wait for the store to update, then check if agent should go first
+						setTimeout(() => {
+						if (player === 'X' && $agent_play) {
+							gameStore.makeAgentMove();
+						}
+						}, 0);
+					}}
+					showHistory={$showHistory}
+					onShowHistoryChange={handleShowHistory}
+					showValueFunction={$showValueFunction}
+					onShowValueFunctionChange={toggleShowValueFunction}
+				/>
+			</div>
+		{/if}
+
+		{#if $showHistory}
+			<div class="px-4 lg:px-10">
+				<History updateState={() => {
+					gameStore.updateState();
+					// After updating state, check if it's the agent's turn and trigger agent move
+					const agent_play_val = get(agent_play);
+					const turn_val = get(turn);
+					const agentPlayer_val = get(agentPlayer);
+					if (agent_play_val && ((agentPlayer_val === 'X' && turn_val) || (agentPlayer_val === 'O' && !turn_val))) {
+						gameStore.makeAgentMove();
+					}
+				}} />
 			</div>
 		{/if}
 	</div>
-</div>
+</div> 

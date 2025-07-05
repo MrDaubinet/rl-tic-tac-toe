@@ -2,11 +2,13 @@ from typing import List, Tuple, Dict
 import random
 import os
 import pickle
-from agents.td_learning import TDAgent, LookAheadAgent, RandomAgent
+from agents.td_agent import TDAgent
+from agents.minmax_agent import MinMaxTDAgent
+from agents.qlearning_agent import QLearning
+from agents.random_agent import RandomAgent
 from environment import TicTacToeEnv
-import random
 
-def evaluate_agent_on_cases(agent: TDAgent, test_cases: List[Tuple[List[str], int]]) -> float:
+def evaluate_agent_on_cases(agent: TDAgent | MinMaxTDAgent | QLearning, test_cases: List[Tuple[List[str], int]]) -> float:
     """
     Evaluate agent's performance on predefined test cases.
     Each test case represents a critical game state where there's a clear best move.
@@ -426,7 +428,7 @@ def save_agent_checkpoint(agent, episode, checkpoint_dir='checkpoints'):
     
     print(f"Saved checkpoint: {filename}")
 
-def load_agent_checkpoint(filename, agent_class=LookAheadAgent):
+def load_agent_checkpoint(filename, agent_class=MinMaxTDAgent):
     """Load agent from checkpoint file"""
     with open(filename, 'rb') as f:
         checkpoint_data = pickle.load(f)

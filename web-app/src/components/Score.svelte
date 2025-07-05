@@ -5,7 +5,7 @@
 </script>
 
 <div class="min-w-md">
-  <div class="flex justify-between text-2xl">
+  <div class="flex justify-between text-md md:text-2xl">
     <div>
       {score[0]} 
       <span class="ml-2">

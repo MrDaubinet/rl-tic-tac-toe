@@ -3,7 +3,7 @@
 */
 class Game {
   states: number[]
-  winner: number
+  winner: number | null
   agent_play: boolean
   turn: boolean
   score: number[]
@@ -28,12 +28,12 @@ class Game {
   }
 
   /* update the game state */
-  setStates(state){
+  setStates(state: number[]){
     this.states = [...state]
   }
 
   /* update the game turn */
-  setTurn(turn){
+  setTurn(turn: boolean){
     this.turn = turn
   }
 
@@ -60,14 +60,14 @@ class Game {
   /* Update the state with a new move 
     - return 'win', 'tie', 'valid', 'invalid'
   */
-  updateState(index){
+  updateState(index: number){
     // check that this is a valid move (not yet taken)
     if(this.states[index] == 0) {
       // update to the new state
-      if (!this.turn) {
-        this.states[index] = 1
+      if (this.turn) {
+        this.states[index] = 1  // Player 1 (X)
       } else {
-        this.states[index] = 2
+        this.states[index] = 2  // Player 2 (O/Agent)
       }
       // check for winner
       if(this.checkWin()){
