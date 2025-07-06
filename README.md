@@ -66,12 +66,10 @@ Example visualization output:
 * `learning_curves_{episode}.png`: Win rates and rewards over time
 * `accuracy_curve_{episode}.png`: Performance on test cases
 
-## Subdirectory Documentation
+## Checkout the Readme's
 
 - For **agent logic, training scripts, and RL details**, see [reinforcement-learning/README.md](reinforcement-learning/README.md)
 - For **frontend usage, running the web app, and UI features**, see [web-app/README.md](web-app/README.md)
-
-## Checkout the Readme's
 
 
 ## License
