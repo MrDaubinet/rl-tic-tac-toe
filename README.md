@@ -1,6 +1,6 @@
 # Play Tic-Tac-Toe against an RL Agent
 
-![Web App Screenshot](web-app/static/image.png)
+![Web App Screenshot](web-app/static/Web-App.png)
 
 *Above: Play against RL agents in a modern, interactive web app frontend.*
 
