@@ -47,16 +47,6 @@
       </button>
     </div>
   </div>
-  <div>
-    <button
-      type="button"
-      class="text-white underline focus:outline-none transition-colors duration-150 ease-in-out {showHistory ? 'font-bold' : ''}"
-      aria-pressed={showHistory}
-      on:click={() => onShowHistoryChange(!showHistory)}
-    >
-      {showHistory ? 'Hide History' : 'Show History'}
-    </button>
-  </div>
   <div class="mt-4 flex items-center gap-2">
     <input type="checkbox" id="show-value-fn" bind:checked={showValueFunction} on:change={() => onShowValueFunctionChange(showValueFunction)} />
     <label for="show-value-fn" class="text-sm cursor-pointer">Show Value Function on Board</label>

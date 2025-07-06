@@ -16,7 +16,7 @@ function createGameStore() {
   const show_notification = writable(false);
   const agentLoading = writable(false);
   const agentPlayer = writable<'X' | 'O'>('O');
-  const agentType = writable<AgentType>('MinMaxTDAgent');
+  const agentType = writable<AgentType>('QLearning');
   const showHistory = writable(false);
   const showValueFunction = writable(false);
 

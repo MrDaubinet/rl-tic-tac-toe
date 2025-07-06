@@ -99,12 +99,20 @@
 			<div class="text-center mt-8">
 				<Score score={$score} agent_play={$agent_play} />
 			</div>
-			<div class="flex justify-center mt-6">
+			<div class="flex justify-center mt-6 gap-4">
 				<button
-					class="px-6 py-2 text-4xl text-white font-semibold transition hover:text-gray-300"
+					class="px-6 py-2 text-3xl text-white font-semibold transition hover:text-gray-300 hover:animate-pulse"
 					on:click={() => gameStore.reset(0)}
 				>
 					Reset Game
+				</button>
+				<button
+					type="button"
+					class="px-6 py-2 text-3xl text-white font-semibold transition hover:text-gray-300 hover:animate-pulse"
+					aria-pressed={$showHistory}
+					on:click={() => handleShowHistory(!$showHistory)}
+				>
+					{$showHistory ? 'Hide History' : 'Show History'}
 				</button>
 			</div>
 		</div>
@@ -125,8 +133,6 @@
 						}
 						}, 0);
 					}}
-					showHistory={$showHistory}
-					onShowHistoryChange={handleShowHistory}
 					showValueFunction={$showValueFunction}
 					onShowValueFunctionChange={toggleShowValueFunction}
 				/>

@@ -23,7 +23,7 @@ class QLearning(Agent):
         """Get Q-value for state-action pair. Initialize optimistically."""
         key = (state_key, action)
         if key not in self.action_value_function:
-            self.action_value_function[key] = 0.2  # Optimistic initialization
+            self.action_value_function[key] = 0.1  # Optimistic initialization
         return self.action_value_function[key]
 
     def get_max_action_value(self, state_key: str, valid_actions: List[int]) -> float:
@@ -111,7 +111,7 @@ class QLearning(Agent):
             self.previous_state_action = None
 
     def save(self, directory: str = 'weights', filename: str = None):
-        """Save Q-values."""
+        """Save Q-values as a nested dictionary: {state: {action: value}}."""
         import os
         import json
         
@@ -119,13 +119,16 @@ class QLearning(Agent):
         if filename is None:
             filename = f'{self.__class__.__name__}_{self.role}.json'
         
-        # Convert tuple keys to strings for JSON serialization
-        q_values_serializable = {f"{state}|{action}": value 
-                               for (state, action), value in self.action_value_function.items()}
+        # Convert to nested dict: {state: {action: value}}
+        q_values_nested = {}
+        for (state, action), value in self.action_value_function.items():
+            if state not in q_values_nested:
+                q_values_nested[state] = {}
+            q_values_nested[state][str(action)] = value
         
         path = os.path.join(directory, filename)
         with open(path, 'w') as f:
-            json.dump(q_values_serializable, f)
+            json.dump(q_values_nested, f)
 
     def load(self, directory: str = 'weights', filename: str = None):
         """Load Q-values."""

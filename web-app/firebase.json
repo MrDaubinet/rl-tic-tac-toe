@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "target": "rl-tic-tac-toe",
     "public": "/build",
     "ignore": [
       "firebase.json",

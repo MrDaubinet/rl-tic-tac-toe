@@ -1,5 +1,16 @@
 {
   "projects": {
-    "default": "rl-tic-tac-toe"
-  }
+    "default": "rl-tic-tac-toe",
+    "blog-projects": "blog-projects-c376c"
+  },
+  "targets": {
+    "blog-projects-c376c": {
+      "hosting": {
+        "rl-tic-tac-toe": [
+          "rl-tic-tac-toe"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
