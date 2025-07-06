@@ -1,6 +1,11 @@
 # Play Tic-Tac-Toe against an RL Agent
 
+![Web App Screenshot](web-app/static/image.png)
+
+*Above: Play against RL agents in a modern, interactive web app frontend.*
+
 ## The Game
+
 
 ### Rules
 Tic-Tac-Toe is a two player competitive game where players take turns marking spaces with either X's or O's on a 3 x 3 grid. 
