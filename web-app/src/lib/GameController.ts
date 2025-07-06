@@ -18,7 +18,7 @@ function createGameStore() {
   const agentPlayer = writable<'X' | 'O'>('O');
   const agentType = writable<AgentType>('MinMaxTDAgent');
   const showHistory = writable(false);
-  const showValueFunction = writable(false);
+  const showValueFunction = writable(true);
 
   const availableAgentTypes = AgentFactory.getAvailableAgentTypes();
 
@@ -186,7 +186,7 @@ function createGameStore() {
 
     // Type guards
     const isTDAgent = (a: any): a is { getValue: (stateKey: string) => number, getStateKey: (state: number[]) => string } =>
-      typeof a.getValue === 'function' && typeof a.getStateKey === 'function' && (a.constructor.name === 'TDAgent' || a.constructor.name === 'MinMaxTDAgent');
+      typeof a.getValue === 'function' && typeof a.getStateKey === 'function';
     const isQLearningAgent = (a: any): a is { getActionValue: (stateKey: string, action: number) => number, getStateKey: (state: number[]) => string } =>
       typeof a.getActionValue === 'function' && typeof a.getStateKey === 'function';
 
