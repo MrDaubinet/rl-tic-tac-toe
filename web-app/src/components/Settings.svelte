@@ -4,8 +4,6 @@
   export let availableAgentTypes: string[] = [];
   export let onAgentTypeChange: (type: string) => void = () => {};
   export let onAgentPlayerChange: (player: 'X' | 'O') => void = () => {};
-  export let showHistory: boolean = false;
-  export let onShowHistoryChange: (show: boolean) => void = () => {};
   export let showValueFunction = false;
   export let onShowValueFunctionChange: (show: boolean) => void = () => {};
 </script>

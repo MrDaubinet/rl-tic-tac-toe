@@ -3,11 +3,13 @@
   import history from "../stores/history.js"
   // store information
   import { game } from "../game.js"
-
   // function prop
-  export let updateState
+  let { updateState } = $props();
 
   // Go back in game time
+  /**
+     * @param {number} index
+     */
   async function goBack(index) {
     // remove states from history
     history.selectState(index)
@@ -23,8 +25,10 @@
 {#each $history as state, index}
   {#if index != ($history.length -1)}
     <div class="{index == 0 ? 'pb-4' : 'py-4'}">
-      <div on:click={() => goBack(index)}
-        class="flex justify-center text-2xl cursor-pointer hover:underline">
+      <button type="button"
+        onclick={() => goBack(index)}
+        class="flex justify-center text-2xl cursor-pointer hover:underline w-full"
+        >
         <h1> Go Back, </h1>
         <div class="ml-2">
           {#if index == 0}
@@ -33,7 +37,7 @@
             to move {index }
           {/if}
         </div>
-      </div>
+      </button>
     </div>
   {/if}
 {/each} 
