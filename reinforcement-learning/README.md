@@ -102,7 +102,7 @@ visualizer.plot_value_function_heatmap(board_state, save_path='value_function.pn
 **My best agent was trained with the following command:**
 
 ```bash
-python train.py --model minmaxtd --competitor independent --episodes 50000 --learning_rate 0.5 --discount_factor 0.9 --epsilon 0.9 --decay_rate 0.999 --min_epsilon 0.01 --lookahead_depth 3
+python train.py --model minmaxtd --competitor independent --episodes 100000 --learning_rate 0.5 --discount_factor 0.9 --epsilon 1 --decay_rate 0.99995 --min_epsilon 0.10 --lookahead_depth 3
 ```
 
 - This agent uses MinMaxTD with a lookahead depth of 3, high initial exploration, and independent training for X and O.
